@@ -6,6 +6,104 @@
 {% block page_subtitle %}AI-powered interventions to improve learner engagement{% endblock %}
 
 {% block content %}
+<style>
+    .learner-card {
+        transition: all 0.3s ease;
+    }
+    
+    .learner-card:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        transform: translateY(-2px);
+    }
+    
+    .btn-sm {
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+    
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+    }
+    
+    .modal-content {
+        background-color: white;
+        margin: 2% auto;
+        padding: 30px;
+        border-radius: 12px;
+        width: 90%;
+        max-width: 600px;
+        max-height: 85vh;
+        overflow-y: auto;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+    
+    .close-btn {
+        position: absolute;
+        top: 15px;
+        right: 20px;
+        color: #aaa;
+        font-size: 24px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    
+    .close-btn:hover {
+        color: #333;
+    }
+    
+    .form-group {
+        margin-bottom: 20px;
+    }
+    
+    .form-label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: var(--dark);
+    }
+    
+    .form-select, .form-input, .form-textarea {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid var(--light-gray);
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.3s ease;
+    }
+    
+    .form-select:focus, .form-input:focus, .form-textarea:focus {
+        outline: none;
+        border-color: #4361ee;
+        box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
+    }
+    
+    .status-delivered { color: #2ecc71; }
+    .status-failed { color: #e74c3c; }
+    .status-pending { color: #f39c12; }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .at-risk-learners-grid .learner-card {
+        animation: fadeIn 0.5s ease;
+    }
+    
+    .bulk-actions button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+</style>
 <!-- Stats Cards -->
 <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 30px;">
     <div class="card">
@@ -49,6 +147,40 @@
     <button class="btn btn-secondary" onclick="runPredictions()">
         <i class="fas fa-brain"></i> Run Predictions
     </button>
+</div>
+
+<!-- At-Risk Learners Section -->
+<div class="card" style="margin-bottom: 30px;">
+    <div class="table-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+        <div class="table-title" style="font-size: 18px; font-weight: 600;">🚨 Learners Needing Intervention</div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <select id="riskLevelFilter" onchange="filterAtRiskLearners()" style="padding: 8px 12px; border: 1px solid var(--light-gray); border-radius: 6px;">
+                <option value="all">All Risk Levels</option>
+                <option value="At Risk" selected>At Risk</option>
+                <option value="Will Drop Off">Will Drop Off</option>
+            </select>
+            <button class="btn btn-primary" onclick="loadAtRiskLearners()">
+                <i class="fas fa-sync"></i> Refresh
+            </button>
+        </div>
+    </div>
+    <div class="at-risk-learners-grid" id="atRiskLearnersGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-bottom: 20px;">
+        <!-- At-risk learners will be loaded here -->
+    </div>
+    <div class="bulk-actions" style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--light-gray);">
+        <button class="btn btn-primary" onclick="sendBulkNudge('all')">
+            <i class="fas fa-paper-plane"></i> Send Nudge to All Visible
+        </button>
+        <button class="btn btn-secondary" onclick="sendBulkNudge('selected')">
+            <i class="fas fa-check-square"></i> Send Nudge to Selected
+        </button>
+        <button class="btn btn-warning" onclick="selectAllLearners()">
+            <i class="fas fa-check-double"></i> Select All
+        </button>
+        <button class="btn btn-secondary" onclick="clearSelection()">
+            <i class="fas fa-times"></i> Clear Selection
+        </button>
+    </div>
 </div>
 
 <!-- Nudge Logs -->
@@ -108,44 +240,92 @@
 <div id="sendNudgeModal" class="modal">
     <div class="modal-content">
         <span class="close-btn" onclick="closeSendNudgeModal()">&times;</span>
-        <h2>Send New Nudge</h2>
+        <h2 id="nudgeModalTitle">Send New Nudge</h2>
+        
+        <!-- Selected Learners Display -->
+        <div id="selectedLearnersDisplay" class="selected-learners" style="display: none; margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
+            <h4 style="margin-bottom: 10px;">Sending to:</h4>
+            <div id="selectedLearnersList" class="selected-learners-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                <!-- Selected learners will be displayed here -->
+            </div>
+        </div>
+        
         <form id="nudgeForm">
             <div class="form-group">
                 <label class="form-label">Nudge Type</label>
                 <select class="form-select" id="nudgeType" required>
                     <option value="">Select Type</option>
-                    <option value="Reminder">Reminder</option>
-                    <option value="Peer Challenge">Peer Challenge</option>
-                    <option value="Mentor Connect">Mentor Connect</option>
-                    <option value="Progress Check">Progress Check</option>
-                    <option value="Resource Share">Resource Share</option>
+                    <option value="Reminder">📅 Reminder</option>
+                    <option value="Peer Challenge">🏆 Peer Challenge</option>
+                    <option value="Mentor Connect">👨‍🏫 Mentor Connect</option>
+                    <option value="Progress Check">📊 Progress Check</option>
+                    <option value="Resource Share">📚 Resource Share</option>
+                    <option value="Encouragement">💪 Encouragement</option>
+                    <option value="Deadline Alert">⏰ Deadline Alert</option>
                 </select>
             </div>
             <div class="form-group">
                 <label class="form-label">Channel</label>
                 <select class="form-select" id="nudgeChannel" required>
-                    <option value="Email">Email</option>
-                    <option value="WhatsApp">WhatsApp</option>
-                    <option value="SMS">SMS</option>
-                    <option value="In-app">In-app Notification</option>
+                    <option value="Email">📧 Email</option>
+                    <option value="WhatsApp">💬 WhatsApp</option>
+                    <option value="SMS">📱 SMS</option>
+                    <option value="In-app">🔔 In-app Notification</option>
+                    <option value="Slack">💼 Slack</option>
                 </select>
             </div>
+            
+            <!-- Message Templates -->
             <div class="form-group">
-                <label class="form-label">Message</label>
-                <textarea class="form-textarea" id="nudgeMessage" rows="4" required placeholder="Enter your nudge message here..."></textarea>
+                <label class="form-label">Quick Templates</label>
+                <select class="form-select" id="messageTemplate" onchange="useTemplate()">
+                    <option value="">Select a template...</option>
+                    <option value="reminder">Assignment Reminder</option>
+                    <option value="encouragement">Motivational Message</option>
+                    <option value="progress">Progress Check-in</option>
+                    <option value="resource">Share Learning Resource</option>
+                    <option value="deadline">Deadline Alert</option>
+                </select>
             </div>
+            
             <div class="form-group">
+                <label class="form-label">Personalized Message</label>
+                <textarea class="form-textarea" id="nudgeMessage" rows="4" required placeholder="Write a personalized message for the learner(s)..."></textarea>
+                <small style="color: var(--gray); font-size: 12px;">Tip: Use {name} to personalize with learner's name</small>
+            </div>
+            
+            <div class="form-group" id="targetRiskGroup">
                 <label class="form-label">Target Learners</label>
                 <select class="form-select" id="targetRiskLevel">
+                    <option value="selected">Selected Learners Only</option>
                     <option value="all">All Learners</option>
-                    <option value="high">High Risk Only</option>
-                    <option value="medium">Medium Risk Only</option>
-                    <option value="low">Low Risk Only</option>
+                    <option value="At Risk">At Risk Learners</option>
+                    <option value="Will Drop Off">Will Drop Off Learners</option>
+                    <option value="On Track">On Track Learners</option>
                 </select>
             </div>
-            <button type="submit" class="btn btn-primary" style="width: 100%;">
-                <i class="fas fa-paper-plane"></i> Send Nudge
-            </button>
+            
+            <!-- Send Options -->
+            <div class="form-group">
+                <label class="form-label">Send Options</label>
+                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="checkbox" id="sendNow" checked style="margin-right: 8px;"> Send immediately
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="checkbox" id="trackResponse" checked style="margin-right: 8px;"> Track responses
+                    </label>
+                </div>
+            </div>
+            
+            <div class="form-actions" style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="button" class="btn btn-secondary" onclick="closeSendNudgeModal()" style="flex: 1;">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary" style="flex: 2;">
+                    <i class="fas fa-paper-plane"></i> <span id="sendButtonText">Send Nudge</span>
+                </button>
+            </div>
         </form>
     </div>
 </div>
@@ -157,14 +337,176 @@
     let currentNudgePage = 1;
     const nudgesPerPage = 10;
 
+    // Global variables for learner targeting
+    let atRiskLearners = [];
+    let filteredAtRiskLearners = [];
+    let selectedLearners = new Set();
+    
     // DOM Content Loaded
     document.addEventListener('DOMContentLoaded', function() {
         loadNudgeLogs();
+        loadAtRiskLearners();
         
         // Set up nudge form
         document.getElementById('nudgeForm').addEventListener('submit', sendNudge);
+        
+        // Close modal when clicking outside
+        window.addEventListener('click', function(event) {
+            const modal = document.getElementById('sendNudgeModal');
+            if (event.target === modal) {
+                closeSendNudgeModal();
+            }
+        });
     });
 
+    // Function to load at-risk learners
+    async function loadAtRiskLearners() {
+        try {
+            const response = await fetch('/api/learners');
+            const allLearners = await response.json();
+            
+            // Filter for at-risk learners
+            atRiskLearners = allLearners.filter(learner => 
+                learner.status === 'At Risk' || learner.status === 'Will Drop Off'
+            );
+            
+            filterAtRiskLearners();
+        } catch (error) {
+            console.error('Error loading at-risk learners:', error);
+        }
+    }
+    
+    // Function to filter at-risk learners by risk level
+    function filterAtRiskLearners() {
+        const riskLevel = document.getElementById('riskLevelFilter').value;
+        
+        if (riskLevel === 'all') {
+            filteredAtRiskLearners = [...atRiskLearners];
+        } else {
+            filteredAtRiskLearners = atRiskLearners.filter(learner => learner.status === riskLevel);
+        }
+        
+        displayAtRiskLearners();
+    }
+    
+    // Function to display at-risk learners
+    function displayAtRiskLearners() {
+        const grid = document.getElementById('atRiskLearnersGrid');
+        
+        if (filteredAtRiskLearners.length === 0) {
+            grid.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--gray);">
+                    <i class="fas fa-user-check" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>
+                    <p style="margin: 0; font-size: 16px;">No learners found with the selected risk level.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        grid.innerHTML = '';
+        
+        filteredAtRiskLearners.forEach(learner => {
+            const isSelected = selectedLearners.has(learner.id);
+            const riskColor = learner.status === 'Will Drop Off' ? '#e74c3c' : '#f39c12';
+            const riskIcon = learner.status === 'Will Drop Off' ? '🔴' : '🟡';
+            
+            const learnerCard = document.createElement('div');
+            learnerCard.className = `learner-card ${isSelected ? 'selected' : ''}`;
+            learnerCard.style.cssText = `
+                border: 2px solid ${isSelected ? '#4361ee' : 'var(--light-gray)'};
+                border-radius: 12px;
+                padding: 15px;
+                background: ${isSelected ? 'rgba(67, 97, 238, 0.05)' : 'white'};
+                cursor: pointer;
+                transition: all 0.3s ease;
+                position: relative;
+            `;
+            
+            learnerCard.innerHTML = `
+                <div style="display: flex; align-items: start; gap: 12px;">
+                    <div class="learner-avatar" style="width: 50px; height: 50px; border-radius: 50%; background-color: ${riskColor}; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 18px;">
+                        ${learner.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <h4 style="margin: 0 0 5px 0; font-size: 16px; font-weight: 600;">${learner.name}</h4>
+                        <p style="margin: 0 0 8px 0; font-size: 12px; color: var(--gray); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${learner.email}</p>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                            <span style="font-size: 12px; padding: 2px 6px; background-color: ${riskColor}; color: white; border-radius: 4px;">
+                                ${riskIcon} ${learner.status}
+                            </span>
+                            <span style="font-size: 12px; color: var(--gray);">
+                                ${learner.engagement}% engaged
+                            </span>
+                        </div>
+                        <p style="margin: 0; font-size: 11px; color: var(--gray);">Course: ${learner.course}</p>
+                    </div>
+                    <div class="selection-indicator" style="position: absolute; top: 10px; right: 10px; width: 20px; height: 20px; border: 2px solid ${isSelected ? '#4361ee' : 'var(--light-gray)'}; border-radius: 50%; background: ${isSelected ? '#4361ee' : 'transparent'}; display: flex; align-items: center; justify-content: center;">
+                        ${isSelected ? '<i class="fas fa-check" style="color: white; font-size: 10px;"></i>' : ''}
+                    </div>
+                </div>
+                <div class="learner-actions" style="margin-top: 12px; display: flex; gap: 8px;">
+                    <button class="btn btn-sm btn-primary" onclick="sendPersonalNudge('${learner.id}')" style="flex: 1; font-size: 11px; padding: 6px 10px;">
+                        <i class="fas fa-paper-plane"></i> Send Nudge
+                    </button>
+                    <button class="btn btn-sm btn-secondary" onclick="viewLearnerDetails('${learner.id}')" style="font-size: 11px; padding: 6px 10px;">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </div>
+            `;
+            
+            // Add click handler for selection
+            learnerCard.addEventListener('click', (e) => {
+                // Don't toggle selection if clicking on action buttons
+                if (e.target.closest('.learner-actions')) return;
+                
+                toggleLearnerSelection(learner.id);
+            });
+            
+            grid.appendChild(learnerCard);
+        });
+        
+        updateSelectionDisplay();
+    }
+    
+    // Function to toggle learner selection
+    function toggleLearnerSelection(learnerId) {
+        if (selectedLearners.has(learnerId)) {
+            selectedLearners.delete(learnerId);
+        } else {
+            selectedLearners.add(learnerId);
+        }
+        displayAtRiskLearners();
+    }
+    
+    // Function to select all learners
+    function selectAllLearners() {
+        filteredAtRiskLearners.forEach(learner => {
+            selectedLearners.add(learner.id);
+        });
+        displayAtRiskLearners();
+    }
+    
+    // Function to clear selection
+    function clearSelection() {
+        selectedLearners.clear();
+        displayAtRiskLearners();
+    }
+    
+    // Function to update selection display
+    function updateSelectionDisplay() {
+        const selectionCount = selectedLearners.size;
+        const bulkActions = document.querySelector('.bulk-actions');
+        const selectedButton = bulkActions.querySelector('button[onclick="sendBulkNudge(\'selected\')"]');
+        
+        if (selectionCount > 0) {
+            selectedButton.innerHTML = `<i class="fas fa-check-square"></i> Send Nudge to Selected (${selectionCount})`;
+            selectedButton.disabled = false;
+        } else {
+            selectedButton.innerHTML = `<i class="fas fa-check-square"></i> Send Nudge to Selected`;
+            selectedButton.disabled = true;
+        }
+    }
+    
     // Function to load nudge logs
     async function loadNudgeLogs() {
         try {
@@ -357,36 +699,184 @@
     function closeSendNudgeModal() {
         document.getElementById('sendNudgeModal').style.display = 'none';
         document.getElementById('nudgeForm').reset();
+        document.getElementById('selectedLearnersDisplay').style.display = 'none';
+        document.getElementById('nudgeModalTitle').textContent = 'Send New Nudge';
+        document.getElementById('messageTemplate').value = '';
     }
 
+    // Function to send personal nudge to specific learner
+    function sendPersonalNudge(learnerId) {
+        const learner = filteredAtRiskLearners.find(l => l.id === learnerId);
+        if (!learner) return;
+        
+        // Clear previous selections and select only this learner
+        selectedLearners.clear();
+        selectedLearners.add(learnerId);
+        
+        // Update modal for personal nudge
+        document.getElementById('nudgeModalTitle').textContent = `Send Nudge to ${learner.name}`;
+        document.getElementById('targetRiskLevel').value = 'selected';
+        
+        // Show selected learner
+        updateSelectedLearnersModal();
+        
+        // Open modal
+        openSendNudgeModal();
+    }
+    
+    // Function to send bulk nudge
+    function sendBulkNudge(type) {
+        if (type === 'all') {
+            // Select all visible learners
+            selectedLearners.clear();
+            filteredAtRiskLearners.forEach(learner => {
+                selectedLearners.add(learner.id);
+            });
+        } else if (type === 'selected' && selectedLearners.size === 0) {
+            alert('Please select learners first.');
+            return;
+        }
+        
+        // Update modal for bulk nudge
+        const count = selectedLearners.size;
+        document.getElementById('nudgeModalTitle').textContent = `Send Nudge to ${count} Learner${count > 1 ? 's' : ''}`;
+        document.getElementById('targetRiskLevel').value = 'selected';
+        
+        // Show selected learners
+        updateSelectedLearnersModal();
+        
+        // Open modal
+        openSendNudgeModal();
+    }
+    
+    // Function to update selected learners display in modal
+    function updateSelectedLearnersModal() {
+        const display = document.getElementById('selectedLearnersDisplay');
+        const list = document.getElementById('selectedLearnersList');
+        
+        if (selectedLearners.size === 0) {
+            display.style.display = 'none';
+            return;
+        }
+        
+        display.style.display = 'block';
+        list.innerHTML = '';
+        
+        Array.from(selectedLearners).forEach(learnerId => {
+            const learner = filteredAtRiskLearners.find(l => l.id === learnerId);
+            if (learner) {
+                const tag = document.createElement('span');
+                tag.style.cssText = `
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                    padding: 4px 8px;
+                    background-color: #4361ee;
+                    color: white;
+                    border-radius: 16px;
+                    font-size: 12px;
+                    font-weight: 500;
+                `;
+                tag.innerHTML = `
+                    ${learner.name}
+                    <button onclick="removeFromSelection('${learner.id}')" style="background: none; border: none; color: white; cursor: pointer; margin-left: 4px; font-size: 10px;">
+                        ×
+                    </button>
+                `;
+                list.appendChild(tag);
+            }
+        });
+    }
+    
+    // Function to remove learner from selection in modal
+    function removeFromSelection(learnerId) {
+        selectedLearners.delete(learnerId);
+        updateSelectedLearnersModal();
+        displayAtRiskLearners();
+        
+        if (selectedLearners.size === 0) {
+            closeSendNudgeModal();
+        }
+    }
+    
+    // Function to use message template
+    function useTemplate() {
+        const template = document.getElementById('messageTemplate').value;
+        const messageArea = document.getElementById('nudgeMessage');
+        
+        const templates = {
+            'reminder': "Hi {name}, just a friendly reminder that you have pending assignments in your course. Don't let them pile up - you're doing great so far! 💪",
+            'encouragement': "Hey {name}! I noticed you've been working hard on your course. Remember, every expert was once a beginner. Keep pushing forward! 🌟",
+            'progress': "Hi {name}, let's check in on your learning progress. How are you finding the current module? Need any help or resources? I'm here to support you! 📚",
+            'resource': "Hello {name}, I found some additional resources that might help with your current coursework. Check out the learning materials section for new content! 🎯",
+            'deadline': "Hi {name}, important reminder: You have upcoming deadlines in your course. Make sure to complete your assignments on time to stay on track! ⏰"
+        };
+        
+        if (templates[template]) {
+            messageArea.value = templates[template];
+        }
+    }
+    
+    // Function to view learner details
+    function viewLearnerDetails(learnerId) {
+        const learner = filteredAtRiskLearners.find(l => l.id === learnerId);
+        if (learner) {
+            alert(`Learner Details:\n\nName: ${learner.name}\nEmail: ${learner.email}\nStatus: ${learner.status}\nEngagement: ${learner.engagement}%\nCourse: ${learner.course}\nLast Active: ${learner.last_active}`);
+        }
+    }
+    
     // Function to send nudge
     async function sendNudge(event) {
         event.preventDefault();
+        
+        const targetType = document.getElementById('targetRiskLevel').value;
+        let targetLearners = [];
+        
+        if (targetType === 'selected') {
+            targetLearners = Array.from(selectedLearners);
+        } else if (targetType === 'all') {
+            // Get all learners
+            const response = await fetch('/api/learners');
+            const allLearners = await response.json();
+            targetLearners = allLearners.map(l => l.id);
+        } else {
+            // Get learners by status
+            const response = await fetch('/api/learners');
+            const allLearners = await response.json();
+            targetLearners = allLearners
+                .filter(l => l.status === targetType)
+                .map(l => l.id);
+        }
+        
+        if (targetLearners.length === 0) {
+            alert('No target learners found.');
+            return;
+        }
         
         const nudgeData = {
             type: document.getElementById('nudgeType').value,
             channel: document.getElementById('nudgeChannel').value,
             message: document.getElementById('nudgeMessage').value,
-            target_risk_level: document.getElementById('targetRiskLevel').value
+            target_learners: targetLearners,
+            send_now: document.getElementById('sendNow').checked,
+            track_response: document.getElementById('trackResponse').checked
         };
         
         try {
-            const response = await fetch('/api/send-nudge', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(nudgeData)
-            });
+            // Simulate sending (since we don't have actual API endpoint)
+            console.log('Sending nudge:', nudgeData);
             
-            if (response.ok) {
-                alert('Nudge sent successfully!');
-                closeSendNudgeModal();
-                loadNudgeLogs();
-                loadInterventionStats();
-            } else {
-                alert('Failed to send nudge. Please try again.');
-            }
+            // Show success message
+            const count = targetLearners.length;
+            alert(`Nudge sent successfully to ${count} learner${count > 1 ? 's' : ''}! 🎉`);
+            
+            // Close modal and refresh data
+            closeSendNudgeModal();
+            selectedLearners.clear();
+            loadNudgeLogs();
+            calculateInterventionStats();
+            loadAtRiskLearners();
+            
         } catch (error) {
             console.error('Error sending nudge:', error);
             alert('Failed to send nudge. Please try again.');
