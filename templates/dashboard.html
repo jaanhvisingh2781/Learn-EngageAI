@@ -1,0 +1,189 @@
+<!-- templates/dashboard.html -->
+{% extends "base.html" %}
+
+{% block title %}Dashboard - LearnEngage AI{% endblock %}
+
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Welcome back! Here's what's happening with your learners today.{% endblock %}
+
+{% block content %}
+<div class="dashboard-cards" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px;">
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3>Total Learners</h3>
+            <i class="fas fa-users" style="font-size: 24px; color: #B22222;"></i>
+        </div>
+        <h2 style="font-size: 32px; margin-bottom: 5px; color: #B22222;">{{ stats.total_learners }}</h2>
+        <p style="color: var(--gray); font-size: 14px;">All registered learners</p>
+    </div>
+    
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3>On Track</h3>
+            <i class="fas fa-check-circle" style="font-size: 24px; color: #27ae60;"></i>
+        </div>
+        <h2 style="font-size: 32px; margin-bottom: 5px; color: #27ae60;">{{ stats.on_track }}</h2>
+        <p style="color: var(--gray); font-size: 14px;">Engaged learners</p>
+    </div>
+    
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3>At Risk</h3>
+            <i class="fas fa-exclamation-triangle" style="font-size: 24px; color: #f39c12;"></i>
+        </div>
+        <h2 style="font-size: 32px; margin-bottom: 5px; color: #f39c12;">{{ stats.at_risk }}</h2>
+        <p style="color: var(--gray); font-size: 14px;">Need attention</p>
+    </div>
+    
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3>Will Drop Off</h3>
+            <i class="fas fa-times-circle" style="font-size: 24px; color: #e74c3c;"></i>
+        </div>
+        <h2 style="font-size: 32px; margin-bottom: 5px; color: #e74c3c;">{{ stats.drop_off }}</h2>
+        <p style="color: var(--gray); font-size: 14px;">High risk learners</p>
+    </div>
+</div>
+
+<div class="quick-stats" style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 30px;">
+    <div class="card">
+        <h3 style="margin-bottom: 20px;">Engagement Trend</h3>
+        <canvas id="engagementChart" height="250"></canvas>
+    </div>
+    
+    <div class="card">
+        <h3 style="margin-bottom: 20px;">Intervention Status</h3>
+        <canvas id="interventionChart" height="250"></canvas>
+    </div>
+</div>
+
+<div class="recent-activity card">
+    <div class="table-header">
+        <div class="table-title">Recent Learner Activity</div>
+        <button class="btn btn-secondary">
+            <i class="fas fa-download"></i>
+            Export
+        </button>
+    </div>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Learner</th>
+                <th>Activity</th>
+                <th>Time</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>John Doe</td>
+                <td>Completed Assignment 3</td>
+                <td>2 hours ago</td>
+                <td><span class="status-badge status-on-track">On Track</span></td>
+            </tr>
+            <tr>
+                <td>Jane Smith</td>
+                <td>Missed Live Session</td>
+                <td>5 hours ago</td>
+                <td><span class="status-badge status-at-risk">At Risk</span></td>
+            </tr>
+            <tr>
+                <td>Robert Johnson</td>
+                <td>Submitted Quiz 2</td>
+                <td>Yesterday</td>
+                <td><span class="status-badge status-on-track">On Track</span></td>
+            </tr>
+            <tr>
+                <td>Sarah Williams</td>
+                <td>No login for 7 days</td>
+                <td>2 days ago</td>
+                <td><span class="status-badge status-drop-off">Will Drop Off</span></td>
+            </tr>
+            <tr>
+                <td>Michael Brown</td>
+                <td>Completed Course 1</td>
+                <td>3 days ago</td>
+                <td><span class="status-badge status-on-track">On Track</span></td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Engagement Trend Chart
+        const engagementCtx = document.getElementById('engagementChart').getContext('2d');
+        const engagementChart = new Chart(engagementCtx, {
+            type: 'line',
+            data: {
+                labels: {{ trend_data.labels | tojson | safe }},
+                datasets: [
+                    {
+                        label: 'Average Engagement',
+                        data: {{ trend_data.average_engagement | tojson | safe }},
+                        borderColor: '#B22222',
+                        backgroundColor: 'rgba(178, 34, 34, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    },
+                    {
+                        label: 'At Risk Learners',
+                        data: {{ trend_data.at_risk_engagement | tojson | safe }},
+                        borderColor: '#f39c12',
+                        backgroundColor: 'rgba(243, 156, 18, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Intervention Status Chart
+        const interventionCtx = document.getElementById('interventionChart').getContext('2d');
+        const interventionChart = new Chart(interventionCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Successful', 'Pending', 'Failed'],
+                datasets: [{
+                    data: [65, 25, 10],
+                    backgroundColor: [
+                        '#27ae60',
+                        '#f39c12',
+                        '#e74c3c'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                    }
+                },
+                cutout: '70%'
+            }
+        });
+    });
+</script>
+{% endblock %}

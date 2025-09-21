@@ -1,0 +1,12 @@
+{
+  "name": "learnengage-ai",
+  "version": "1.0.0",
+  "description": "AI-powered learner engagement prediction system",
+  "scripts": {
+    "build": "chmod +x build.sh && ./build.sh",
+    "start": "python app.py"
+  },
+  "engines": {
+    "python": "3.9.x"
+  }
+}

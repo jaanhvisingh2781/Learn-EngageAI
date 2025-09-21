@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - LearnEngage AI{% endblock %}
+
+{% block page_title %}Analytics & Reports{% endblock %}
+{% block page_subtitle %}Detailed insights into learner engagement and performance{% endblock %}
+
+{% block content %}
+<!-- Time Filter -->
+<div class="time-filter card" style="margin-bottom: 20px;">
+    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+        <button class="time-btn btn btn-secondary active" onclick="changeTimeFilter('7days')">Last 7 Days</button>
+        <button class="time-btn btn btn-secondary" onclick="changeTimeFilter('30days')">Last 30 Days</button>
+        <button class="time-btn btn btn-secondary" onclick="changeTimeFilter('90days')">Last 90 Days</button>
+        <button class="time-btn btn btn-secondary" onclick="changeTimeFilter('all')">All Time</button>
+    </div>
+</div>
+
+<!-- Analytics Cards -->
+<div class="analytics-cards" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px;">
+    <div class="card analytics-card">
+        <div class="analytics-icon" style="background-color: rgba(67, 97, 238, 0.1); color: #4361ee; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; font-size: 24px;">
+            <i class="fas fa-chart-line"></i>
+        </div>
+        <div class="analytics-value" id="avg-engagement" style="font-size: 28px; font-weight: 600; margin: 5px 0;">0%</div>
+        <div class="analytics-label" style="color: var(--gray); font-size: 14px;">Average Engagement</div>
+        <div class="trend up" id="engagement-trend" style="font-size: 12px; margin-top: 5px; color: #2ecc71;">+5.2% from previous period</div>
+    </div>
+    <div class="card analytics-card">
+        <div class="analytics-icon" style="background-color: rgba(76, 201, 240, 0.1); color: #4cc9f0; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; font-size: 24px;">
+            <i class="fas fa-check-circle"></i>
+        </div>
+        <div class="analytics-value" id="completion-rate" style="font-size: 28px; font-weight: 600; margin: 5px 0;">0%</div>
+        <div class="analytics-label" style="color: var(--gray); font-size: 14px;">Course Completion Rate</div>
+        <div class="trend up" id="completion-trend" style="font-size: 12px; margin-top: 5px; color: #2ecc71;">+3.8% from previous period</div>
+    </div>
+    <div class="card analytics-card">
+        <div class="analytics-icon" style="background-color: rgba(247, 37, 133, 0.1); color: #f72585; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; font-size: 24px;">
+            <i class="fas fa-calendar"></i>
+        </div>
+        <div class="analytics-value" id="retention-rate" style="font-size: 28px; font-weight: 600; margin: 5px 0;">0%</div>
+        <div class="analytics-label" style="color: var(--gray); font-size: 14px;">7-Day Retention Rate</div>
+        <div class="trend down" id="retention-trend" style="font-size: 12px; margin-top: 5px; color: #e74c3c;">-1.5% from previous period</div>
+    </div>
+</div>
+
+<!-- Charts Grid -->
+<div class="charts-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
+    <div class="card">
+        <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div class="chart-title" style="font-size: 18px; font-weight: 600;">Engagement by Day of Week</div>
+        </div>
+        <canvas id="engagementByDayChart" height="250"></canvas>
+    </div>
+    <div class="card">
+        <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div class="chart-title" style="font-size: 18px; font-weight: 600;">Activity Distribution</div>
+        </div>
+        <canvas id="activityDistributionChart" height="250"></canvas>
+    </div>
+</div>
+
+<!-- Cohort Analysis -->
+<div class="card">
+    <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div class="chart-title" style="font-size: 18px; font-weight: 600;">Cohort Performance Analysis</div>
+    </div>
+    <div class="table-container">
+        <table class="cohort-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+            <thead>
+                <tr>
+                    <th style="padding: 12px 15px; text-align: center; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Cohort</th>
+                    <th style="padding: 12px 15px; text-align: center; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Start Date</th>
+                    <th style="padding: 12px 15px; text-align: center; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Learners</th>
+                    <th style="padding: 12px 15px; text-align: center; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Avg. Engagement</th>
+                    <th style="padding: 12px 15px; text-align: center; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Completion Rate</th>
+                    <th style="padding: 12px 15px; text-align: center; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Retention Rate</th>
+                </tr>
+            </thead>
+            <tbody id="cohortTableBody">
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 12px 15px;">Loading cohort data...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Dropout Analysis -->
+<div class="card" style="margin-top: 30px;">
+    <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div class="chart-title" style="font-size: 18px; font-weight: 600;">AI-Powered Dropout Risk Analysis</div>
+    </div>
+    <canvas id="dropoutRiskChart" height="300"></canvas>
+    
+    <div class="risk-factors" id="riskFactors" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 20px;">
+        <div class="risk-factor" style="background-color: #f8f9fa; padding: 15px; border-radius: 10px;">
+            <h4 style="margin-bottom: 10px; color: var(--dark);">Top Risk Factors</h4>
+            <p style="color: var(--gray); font-size: 14px;">Loading risk factors analysis...</p>
+        </div>
+        <div class="risk-factor" style="background-color: #f8f9fa; padding: 15px; border-radius: 10px;">
+            <h4 style="margin-bottom: 10px; color: var(--dark);">Recommended Interventions</h4>
+            <p style="color: var(--gray); font-size: 14px;">Loading intervention recommendations...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Global variables
+    let engagementByDayChart, activityDistributionChart, dropoutRiskChart;
+    let currentTimeFilter = '7days';
+
+    // DOM Content Loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load analytics data
+        loadAnalyticsData();
+        loadCohortData();
+        loadDropoutAnalysis();
+    });
+
+    // Change time filter
+    function changeTimeFilter(filter) {
+        document.querySelectorAll('.time-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        event.target.classList.add('active');
+        currentTimeFilter = filter;
+        
+        // Reload data with new filter
+        loadAnalyticsData();
+        loadCohortData();
+        loadDropoutAnalysis();
+    }
+
+    // Function to load analytics data
+    async function loadAnalyticsData() {
+        try {
+            const response = await fetch(`/api/analytics?time_filter=${currentTimeFilter}`);
+            const data = await response.json();
+            
+            // Update analytics cards
+            document.getElementById('avg-engagement').textContent = `${data.avg_engagement.toFixed(1)}%`;
+            document.getElementById('completion-rate').textContent = `${data.completion_rate.toFixed(1)}%`;
+            document.getElementById('retention-rate').textContent = `${data.retention_rate.toFixed(1)}%`;
+            
+            // Update trends
+            document.getElementById('engagement-trend').textContent = 
+                `${data.engagement_trend >= 0 ? '+' : ''}${data.engagement_trend.toFixed(1)}% from previous period`;
+            document.getElementById('engagement-trend').className = `trend ${data.engagement_trend >= 0 ? 'up' : 'down'}`;
+            
+            document.getElementById('completion-trend').textContent = 
+                `${data.completion_trend >= 0 ? '+' : ''}${data.completion_trend.toFixed(1)}% from previous period`;
+            document.getElementById('completion-trend').className = `trend ${data.completion_trend >= 0 ? 'up' : 'down'}`;
+            
+            document.getElementById('retention-trend').textContent = 
+                `${data.retention_trend >= 0 ? '+' : ''}${data.retention_trend.toFixed(1)}% from previous period`;
+            document.getElementById('retention-trend').className = `trend ${data.retention_trend >= 0 ? 'up' : 'down'}`;
+            
+            // Update charts
+            updateEngagementByDayChart(data.engagement_by_day);
+            updateActivityDistributionChart(data.activity_distribution);
+        } catch (error) {
+            console.error('Error loading analytics data:', error);
+        }
+    }
+
+    // Function to load cohort data
+    async function loadCohortData() {
+        try {
+            const response = await fetch(`/api/cohorts?time_filter=${currentTimeFilter}`);
+            const cohorts = await response.json();
+            
+            const tableBody = document.getElementById('cohortTableBody');
+            tableBody.innerHTML = '';
+            
+            if (cohorts.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center;">No cohort data available</td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            cohorts.forEach(cohort => {
+                const row = document.createElement('tr');
+                
+                // Determine value classes based on performance
+                const engagementClass = getValueClass(cohort.avg_engagement, 70, 40);
+                const completionClass = getValueClass(cohort.completion_rate, 70, 40);
+                const retentionClass = getValueClass(cohort.retention_rate, 70, 40);
+                
+                row.innerHTML = `
+                    <td style="padding: 12px 15px; text-align: center; border-bottom: 1px solid var(--light-gray);">${cohort.cohort_id}</td>
+                    <td style="padding: 12px 15px; text-align: center; border-bottom: 1px solid var(--light-gray);">${cohort.start_date}</td>
+                    <td style="padding: 12px 15px; text-align: center; border-bottom: 1px solid var(--light-gray);">${cohort.learner_count}</td>
+                    <td style="padding: 12px 15px; text-align: center; border-bottom: 1px solid var(--light-gray);" class="${engagementClass}">${cohort.avg_engagement.toFixed(1)}%</td>
+                    <td style="padding: 12px 15px; text-align: center; border-bottom: 1px solid var(--light-gray);" class="${completionClass}">${cohort.completion_rate.toFixed(1)}%</td>
+                    <td style="padding: 12px 15px; text-align: center; border-bottom: 1px solid var(--light-gray);" class="${retentionClass}">${cohort.retention_rate.toFixed(1)}%</td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+        } catch (error) {
+            console.error('Error loading cohort data:', error);
+        }
+    }
+
+    // Helper function to determine value class
+    function getValueClass(value, highThreshold, mediumThreshold) {
+        if (value >= highThreshold) return 'high-value';
+        if (value >= mediumThreshold) return 'medium-value';
+        return 'low-value';
+    }
+
+    // Function to load dropout analysis
+    async function loadDropoutAnalysis() {
+        try {
+            const response = await fetch(`/api/dropout-analysis?time_filter=${currentTimeFilter}`);
+            const data = await response.json();
+            
+            // Update dropout risk chart
+            updateDropoutRiskChart(data.risk_distribution);
+            
+            // Update risk factors
+            const riskFactorsDiv = document.getElementById('riskFactors');
+            riskFactorsDiv.innerHTML = `
+                <div class="risk-factor" style="background-color: #f8f9fa; padding: 15px; border-radius: 10px;">
+                    <h4 style="margin-bottom: 10px; color: var(--dark);">Top Risk Factors</h4>
+                    <ul>
+                        ${data.top_risk_factors.map(factor => `<li>${factor}</li>`).join('')}
+                    </ul>
+                </div>
+                <div class="risk-factor" style="background-color: #f8f9fa; padding: 15px; border-radius: 10px;">
+                    <h4 style="margin-bottom: 10px; color: var(--dark);">Recommended Interventions</h4>
+                    <ul>
+                        ${data.recommended_interventions.map(intervention => `<li>${intervention}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        } catch (error) {
+            console.error('Error loading dropout analysis:', error);
+        }
+    }
+
+    // Function to update engagement by day chart
+    function updateEngagementByDayChart(data) {
+        const ctx = document.getElementById('engagementByDayChart').getContext('2d');
+        
+        if (engagementByDayChart) {
+            engagementByDayChart.destroy();
+        }
+        
+        engagementByDayChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.labels,
+                datasets: [{
+                    label: 'Engagement (%)',
+                    data: data.values,
+                    backgroundColor: '#4361ee',
+                    borderColor: '#3a0ca3',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Function to update activity distribution chart
+    function updateActivityDistributionChart(data) {
+        const ctx = document.getElementById('activityDistributionChart').getContext('2d');
+        
+        if (activityDistributionChart) {
+            activityDistributionChart.destroy();
+        }
+        
+        activityDistributionChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: data.labels,
+                datasets: [{
+                    data: data.values,
+                    backgroundColor: [
+                        '#4361ee',
+                        '#4cc9f0',
+                        '#f72585',
+                        '#3a0ca3',
+                        '#7209b7'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                    }
+                }
+            }
+        });
+    }
+
+    // Function to update dropout risk chart
+    function updateDropoutRiskChart(data) {
+        const ctx = document.getElementById('dropoutRiskChart').getContext('2d');
+        
+        if (dropoutRiskChart) {
+            dropoutRiskChart.destroy();
+        }
+        
+        dropoutRiskChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.labels,
+                datasets: [
+                    {
+                        label: 'Low Risk',
+                        data: data.low_risk,
+                        backgroundColor: '#2ecc71',
+                        stack: 'Stack 0'
+                    },
+                    {
+                        label: 'Medium Risk',
+                        data: data.medium_risk,
+                        backgroundColor: '#f39c12',
+                        stack: 'Stack 0'
+                    },
+                    {
+                        label: 'High Risk',
+                        data: data.high_risk,
+                        backgroundColor: '#e74c3c',
+                        stack: 'Stack 0'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        stacked: true,
+                    },
+                    y: {
+                        stacked: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Learners'
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Dropout Risk Distribution by Cohort'
+                    }
+                }
+            }
+        });
+    }
+</script>
+
+<style>
+    .high-value {
+        color: #2ecc71;
+        font-weight: 600;
+    }
+    
+    .medium-value {
+        color: #f39c12;
+        font-weight: 600;
+    }
+    
+    .low-value {
+        color: #e74c3c;
+        font-weight: 600;
+    }
+    
+    .trend.up {
+        color: #2ecc71;
+    }
+    
+    .trend.down {
+        color: #e74c3c;
+    }
+    
+    @media (max-width: 1200px) {
+        .analytics-cards {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .charts-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .risk-factors {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .analytics-cards {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}

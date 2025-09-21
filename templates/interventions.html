@@ -1,0 +1,529 @@
+{% extends "base.html" %}
+
+{% block title %}Interventions - LearnEngage AI{% endblock %}
+
+{% block page_title %}Interventions & Nudges{% endblock %}
+{% block page_subtitle %}AI-powered interventions to improve learner engagement{% endblock %}
+
+{% block content %}
+<!-- Stats Cards -->
+<div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 30px;">
+    <div class="card">
+        <div class="stat-icon" style="background-color: rgba(67, 97, 238, 0.1); color: #4361ee; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; font-size: 20px;">
+            <i class="fas fa-envelope"></i>
+        </div>
+        <div class="stat-value" id="total-nudges" style="font-size: 24px; font-weight: 600; margin: 5px 0;">0</div>
+        <div class="stat-label" style="color: var(--gray); font-size: 14px;">Total Nudges Sent</div>
+    </div>
+    <div class="card">
+        <div class="stat-icon" style="background-color: rgba(46, 204, 113, 0.1); color: #2ecc71; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; font-size: 20px;">
+            <i class="fas fa-check-circle"></i>
+        </div>
+        <div class="stat-value" id="successful-nudges" style="font-size: 24px; font-weight: 600; margin: 5px 0;">0</div>
+        <div class="stat-label" style="color: var(--gray); font-size: 14px;">Successful Nudges</div>
+    </div>
+    <div class="card">
+        <div class="stat-icon" style="background-color: rgba(241, 196, 15, 0.1); color: #f1c40f; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; font-size: 20px;">
+            <i class="fas fa-chart-line"></i>
+        </div>
+        <div class="stat-value" id="engagement-increase" style="font-size: 24px; font-weight: 600; margin: 5px 0;">0%</div>
+        <div class="stat-label" style="color: var(--gray); font-size: 14px;">Engagement Increase</div>
+    </div>
+    <div class="card">
+        <div class="stat-icon" style="background-color: rgba(155, 89, 182, 0.1); color: #9b59b6; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; font-size: 20px;">
+            <i class="fas fa-users"></i>
+        </div>
+        <div class="stat-value" id="at-risk-learners" style="font-size: 24px; font-weight: 600; margin: 5px 0;">0</div>
+        <div class="stat-label" style="color: var(--gray); font-size: 14px;">At-Risk Learners</div>
+    </div>
+</div>
+
+<!-- Action Buttons -->
+<div class="header-actions" style="margin-bottom: 20px; display: flex; gap: 15px; flex-wrap: wrap;">
+    <button class="btn btn-primary" onclick="openSendNudgeModal()">
+        <i class="fas fa-paper-plane"></i> Send New Nudge
+    </button>
+    <button class="btn btn-secondary" onclick="trainModel()">
+        <i class="fas fa-robot"></i> Train AI Model
+    </button>
+    <button class="btn btn-secondary" onclick="runPredictions()">
+        <i class="fas fa-brain"></i> Run Predictions
+    </button>
+</div>
+
+<!-- Nudge Logs -->
+<div class="card">
+    <div class="table-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+        <div class="table-title" style="font-size: 18px; font-weight: 600;">Recent Nudge Activity</div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <select id="nudgeFilter" onchange="filterNudgeLogs()" style="padding: 8px 12px; border: 1px solid var(--light-gray); border-radius: 6px;">
+                <option value="all">All Types</option>
+                <option value="Reminder">Reminders</option>
+                <option value="Peer Challenge">Peer Challenges</option>
+                <option value="Mentor Connect">Mentor Connect</option>
+                <option value="Progress Check">Progress Checks</option>
+                <option value="Resource Share">Resource Shares</option>
+            </select>
+            <button class="btn btn-primary" onclick="loadNudgeLogs()">
+                <i class="fas fa-sync"></i> Refresh
+            </button>
+        </div>
+    </div>
+    <div class="table-container" style="overflow-x: auto;">
+        <table class="nudge-table" style="width: 100%; border-collapse: collapse; min-width: 900px;">
+            <thead>
+                <tr>
+                    <th style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Learner</th>
+                    <th style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Type</th>
+                    <th style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Channel</th>
+                    <th style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Message</th>
+                    <th style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Timestamp</th>
+                    <th style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Status</th>
+                    <th style="padding: 12px 15px; text-align: center; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="nudgeLogsBody">
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 12px 15px;">Loading nudge logs...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="table-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; flex-wrap: wrap; gap: 10px;">
+        <div class="table-info" style="color: var(--gray); font-size: 14px;">
+            Showing <span id="nudgeStartIndex">0</span> to <span id="nudgeEndIndex">0</span> of <span id="totalNudges">0</span> nudges
+        </div>
+        <div class="pagination" style="display: flex; gap: 10px;">
+            <button class="btn btn-secondary" id="nudgePrevPage" onclick="changeNudgePage(-1)" disabled>
+                <i class="fas fa-chevron-left"></i> Previous
+            </button>
+            <button class="btn btn-secondary" id="nudgeNextPage" onclick="changeNudgePage(1)" disabled>
+                Next <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Send Nudge Modal -->
+<div id="sendNudgeModal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn" onclick="closeSendNudgeModal()">&times;</span>
+        <h2>Send New Nudge</h2>
+        <form id="nudgeForm">
+            <div class="form-group">
+                <label class="form-label">Nudge Type</label>
+                <select class="form-select" id="nudgeType" required>
+                    <option value="">Select Type</option>
+                    <option value="Reminder">Reminder</option>
+                    <option value="Peer Challenge">Peer Challenge</option>
+                    <option value="Mentor Connect">Mentor Connect</option>
+                    <option value="Progress Check">Progress Check</option>
+                    <option value="Resource Share">Resource Share</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Channel</label>
+                <select class="form-select" id="nudgeChannel" required>
+                    <option value="Email">Email</option>
+                    <option value="WhatsApp">WhatsApp</option>
+                    <option value="SMS">SMS</option>
+                    <option value="In-app">In-app Notification</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Message</label>
+                <textarea class="form-textarea" id="nudgeMessage" rows="4" required placeholder="Enter your nudge message here..."></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Target Learners</label>
+                <select class="form-select" id="targetRiskLevel">
+                    <option value="all">All Learners</option>
+                    <option value="high">High Risk Only</option>
+                    <option value="medium">Medium Risk Only</option>
+                    <option value="low">Low Risk Only</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">
+                <i class="fas fa-paper-plane"></i> Send Nudge
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Global variables
+    let nudgeLogs = [];
+    let filteredNudgeLogs = [];
+    let currentNudgePage = 1;
+    const nudgesPerPage = 10;
+
+    // DOM Content Loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        loadNudgeLogs();
+        loadInterventionStats();
+        
+        // Set up nudge form
+        document.getElementById('nudgeForm').addEventListener('submit', sendNudge);
+    });
+
+    // Function to load nudge logs
+    async function loadNudgeLogs() {
+        try {
+            showLoader('nudgeLogsBody', 'Loading nudge logs...');
+            const response = await fetch('/api/nudge-logs');
+            nudgeLogs = await response.json();
+            filterNudgeLogs();
+        } catch (error) {
+            console.error('Error loading nudge logs:', error);
+            showError('nudgeLogsBody', 'Failed to load nudge logs');
+        }
+    }
+
+    // Function to load intervention stats
+    async function loadInterventionStats() {
+        try {
+            const response = await fetch('/api/intervention-stats');
+            const stats = await response.json();
+            
+            document.getElementById('total-nudges').textContent = stats.total_nudges.toLocaleString();
+            document.getElementById('successful-nudges').textContent = stats.successful_nudges.toLocaleString();
+            document.getElementById('engagement-increase').textContent = `${stats.engagement_increase}%`;
+            document.getElementById('at-risk-learners').textContent = stats.at_risk_learners.toLocaleString();
+        } catch (error) {
+            console.error('Error loading intervention stats:', error);
+        }
+    }
+
+    // Function to filter nudge logs
+    function filterNudgeLogs() {
+        const filterType = document.getElementById('nudgeFilter').value;
+        
+        if (filterType === 'all') {
+            filteredNudgeLogs = [...nudgeLogs];
+        } else {
+            filteredNudgeLogs = nudgeLogs.filter(log => log.type === filterType);
+        }
+        
+        currentNudgePage = 1;
+        displayNudgeLogs();
+        updateNudgePagination();
+    }
+
+    // Function to display nudge logs
+    function displayNudgeLogs() {
+        const tbody = document.getElementById('nudgeLogsBody');
+        tbody.innerHTML = '';
+        
+        if (filteredNudgeLogs.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align: center;">No nudge logs found</td>
+                </tr>
+            `;
+            return;
+        }
+        
+        // Calculate start and end index for current page
+        const startIndex = (currentNudgePage - 1) * nudgesPerPage;
+        const endIndex = Math.min(startIndex + nudgesPerPage, filteredNudgeLogs.length);
+        
+        // Update pagination info
+        document.getElementById('nudgeStartIndex').textContent = startIndex + 1;
+        document.getElementById('nudgeEndIndex').textContent = endIndex;
+        document.getElementById('totalNudges').textContent = filteredNudgeLogs.length;
+        
+        // Display nudge logs for current page
+        for (let i = startIndex; i < endIndex; i++) {
+            const log = filteredNudgeLogs[i];
+            const row = document.createElement('tr');
+            
+            // Determine status class
+            let statusClass = '';
+            if (log.status === 'Delivered') statusClass = 'status-delivered';
+            else if (log.status === 'Failed') statusClass = 'status-failed';
+            else if (log.status === 'Pending') statusClass = 'status-pending';
+            
+            // Format timestamp
+            const timestamp = formatDateTime(log.timestamp);
+            
+            // Truncate message if too long
+            const truncatedMessage = log.message.length > 50 ? 
+                log.message.substring(0, 50) + '...' : log.message;
+            
+            row.innerHTML = `
+                <td style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray);">
+                    <div style="display: flex; align-items: center;">
+                        <div class="learner-avatar" style="width: 40px; height: 40px; border-radius: 50%; background-color: #4361ee; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; margin-right: 10px;">
+                            ${log.learner_name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                            <div style="font-weight: 600;">${log.learner_name}</div>
+                            <div style="font-size: 12px; color: var(--gray);">${log.learner_email}</div>
+                        </div>
+                    </div>
+                </td>
+                <td style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray);">
+                    <span class="nudge-type-badge" style="padding: 4px 8px; border-radius: 4px; background-color: #f0f4ff; color: #4361ee; font-size: 12px; font-weight: 600;">
+                        ${log.type}
+                    </span>
+                </td>
+                <td style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray);">${log.channel}</td>
+                <td style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray);" title="${log.message}">${truncatedMessage}</td>
+                <td style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray);">${timestamp}</td>
+                <td style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray);" class="${statusClass}">
+                    ${log.status}
+                </td>
+                <td style="padding: 12px 15px; text-align: center; border-bottom: 1px solid var(--light-gray);">
+                    <button class="btn-icon" onclick="viewNudgeDetails('${log.id}')" title="View Details">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </td>
+            `;
+            
+            tbody.appendChild(row);
+        }
+    }
+
+    // Function to update nudge pagination
+    function updateNudgePagination() {
+        const totalPages = Math.ceil(filteredNudgeLogs.length / nudgesPerPage);
+        const prevButton = document.getElementById('nudgePrevPage');
+        const nextButton = document.getElementById('nudgeNextPage');
+        
+        prevButton.disabled = currentNudgePage <= 1;
+        nextButton.disabled = currentNudgePage >= totalPages;
+    }
+
+    // Function to change nudge page
+    function changeNudgePage(direction) {
+        const totalPages = Math.ceil(filteredNudgeLogs.length / nudgesPerPage);
+        currentNudgePage += direction;
+        
+        if (currentNudgePage < 1) currentNudgePage = 1;
+        if (currentNudgePage > totalPages) currentNudgePage = totalPages;
+        
+        displayNudgeLogs();
+        updateNudgePagination();
+    }
+
+    // Function to format date and time
+    function formatDateTime(dateTimeString) {
+        if (!dateTimeString) return 'N/A';
+        
+        try {
+            const date = new Date(dateTimeString);
+            return date.toLocaleString();
+        } catch (e) {
+            return dateTimeString;
+        }
+    }
+
+    // Function to open send nudge modal
+    function openSendNudgeModal() {
+        document.getElementById('sendNudgeModal').style.display = 'block';
+    }
+
+    // Function to close send nudge modal
+    function closeSendNudgeModal() {
+        document.getElementById('sendNudgeModal').style.display = 'none';
+        document.getElementById('nudgeForm').reset();
+    }
+
+    // Function to send nudge
+    async function sendNudge(event) {
+        event.preventDefault();
+        
+        const nudgeData = {
+            type: document.getElementById('nudgeType').value,
+            channel: document.getElementById('nudgeChannel').value,
+            message: document.getElementById('nudgeMessage').value,
+            target_risk_level: document.getElementById('targetRiskLevel').value
+        };
+        
+        try {
+            const response = await fetch('/api/send-nudge', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(nudgeData)
+            });
+            
+            if (response.ok) {
+                alert('Nudge sent successfully!');
+                closeSendNudgeModal();
+                loadNudgeLogs();
+                loadInterventionStats();
+            } else {
+                alert('Failed to send nudge. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error sending nudge:', error);
+            alert('Failed to send nudge. Please try again.');
+        }
+    }
+
+    // Function to train model
+    function trainModel() {
+        alert('AI model training feature will be implemented here.');
+    }
+
+    // Function to run predictions
+    function runPredictions() {
+        alert('Prediction running feature will be implemented here.');
+    }
+
+    // Function to view nudge details
+    function viewNudgeDetails(nudgeId) {
+        alert(`View details for nudge ID: ${nudgeId}`);
+    }
+
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        const modal = document.getElementById('sendNudgeModal');
+        if (event.target === modal) {
+            closeSendNudgeModal();
+        }
+    };
+</script>
+
+<style>
+    .status-delivered {
+        color: #2ecc71;
+        font-weight: 600;
+    }
+    
+    .status-failed {
+        color: #e74c3c;
+        font-weight: 600;
+    }
+    
+    .status-pending {
+        color: #f39c12;
+        font-weight: 600;
+    }
+    
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+    
+    .modal-content {
+        background-color: white;
+        margin: 5% auto;
+        padding: 20px;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 600px;
+        position: relative;
+    }
+    
+    .close-btn {
+        position: absolute;
+        right: 20px;
+        top: 15px;
+        font-size: 24px;
+        cursor: pointer;
+        color: var(--gray);
+    }
+    
+    .close-btn:hover {
+        color: var(--dark);
+    }
+    
+    .form-group {
+        margin-bottom: 15px;
+    }
+    
+    .form-label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 600;
+    }
+    
+    .form-select, .form-textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid var(--light-gray);
+        border-radius: 6px;
+        font-size: 14px;
+    }
+    
+    .form-textarea {
+        resize: vertical;
+    }
+    
+    @media (max-width: 768px) {
+        .header-actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        
+        .header-actions button {
+            width: 100%;
+        }
+        
+        .table-header, .table-footer {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 15px;
+        }
+        
+        .pagination {
+            justify-content: center;
+        }
+        
+        .nudge-table {
+            font-size: 14px;
+        }
+        
+        .nudge-table th,
+        .nudge-table td {
+            padding: 8px 10px;
+        }
+        
+        .learner-avatar {
+            width: 30px !important;
+            height: 30px !important;
+            font-size: 12px !important;
+            margin-right: 8px !important;
+        }
+        
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .modal-content {
+            width: 95%;
+            margin: 10% auto;
+            padding: 15px;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .nudge-table {
+            font-size: 12px;
+        }
+        
+        .nudge-table th,
+        .nudge-table td {
+            padding: 6px 8px;
+        }
+        
+        .nudge-type-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+        }
+    }
+</style>
+{% endblock %}
