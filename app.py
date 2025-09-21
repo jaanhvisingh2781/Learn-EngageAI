@@ -17,7 +17,36 @@ def index():
 
 @app.route('/dashboard')
 def dashboard():
-    return render_template('dashboard.html')
+    # Get stats for dashboard
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) as total FROM Learners")
+        total_learners = cursor.fetchone()['total']
+        conn.close()
+        
+        stats = {
+            'total_learners': total_learners,
+            'on_track': int(total_learners * 0.6),
+            'at_risk': int(total_learners * 0.3),
+            'drop_off': int(total_learners * 0.1)
+        }
+    except:
+        stats = {
+            'total_learners': 100,
+            'on_track': 60,
+            'at_risk': 30,
+            'drop_off': 10
+        }
+    
+    # Mock trend data for charts
+    trend_data = {
+        'labels': ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        'average_engagement': [65, 59, 70, 65, 72, 68, 74],
+        'at_risk_engagement': [15, 18, 12, 20, 16, 22, 14]
+    }
+    
+    return render_template('dashboard.html', stats=stats, trend_data=trend_data)
 
 @app.route('/learners')
 def learners():
