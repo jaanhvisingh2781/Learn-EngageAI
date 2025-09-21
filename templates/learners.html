@@ -87,7 +87,7 @@
                     <th style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Cohort</th>
                     <th style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Engagement</th>
                     <th style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Progress</th>
-                    <th style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Risk Level</th>
+                    <th style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Status</th>
                     <th style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Last Active</th>
                     <th style="padding: 12px 15px; text-align: center; border-bottom: 1px solid var(--light-gray); background-color: var(--light); font-weight: 600;">Actions</th>
                 </tr>
@@ -114,6 +114,41 @@
     </div>
 </div>
 
+<style>
+    .status-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 500;
+        text-align: center;
+    }
+    
+    .status-on-track {
+        background-color: rgba(46, 204, 113, 0.1);
+        color: #2ecc71;
+        border: 1px solid rgba(46, 204, 113, 0.3);
+    }
+    
+    .status-at-risk {
+        background-color: rgba(241, 196, 15, 0.1);
+        color: #f1c40f;
+        border: 1px solid rgba(241, 196, 15, 0.3);
+    }
+    
+    .status-will-drop-off {
+        background-color: rgba(231, 76, 60, 0.1);
+        color: #e74c3c;
+        border: 1px solid rgba(231, 76, 60, 0.3);
+    }
+    
+    .status-completed {
+        background-color: rgba(155, 89, 182, 0.1);
+        color: #9b59b6;
+        border: 1px solid rgba(155, 89, 182, 0.3);
+    }
+</style>
+
 <script>
     // Global variables
     let learners = [];
@@ -124,7 +159,6 @@
     // DOM Content Loaded
     document.addEventListener('DOMContentLoaded', function() {
         loadLearners();
-        loadLearnerStats();
         
         // Add event listeners for search and filters
         document.getElementById('learnerSearch').addEventListener('input', filterLearners);
@@ -139,6 +173,7 @@
             showLoader('learnerTableBody', 'Loading learners...');
             const response = await fetch('/api/learners');
             learners = await response.json();
+            calculateLearnerStats(); // Calculate stats after loading learners
             filterLearners();
         } catch (error) {
             console.error('Error loading learners:', error);
@@ -146,19 +181,39 @@
         }
     }
 
-    // Function to load learner stats
-    async function loadLearnerStats() {
-        try {
-            const response = await fetch('/api/learner-stats');
-            const stats = await response.json();
-            
-            document.getElementById('total-learners').textContent = stats.total_learners.toLocaleString();
-            document.getElementById('active-learners').textContent = stats.active_learners.toLocaleString();
-            document.getElementById('at-risk-learners').textContent = stats.at_risk_learners.toLocaleString();
-            document.getElementById('completed-learners').textContent = stats.completed_learners.toLocaleString();
-        } catch (error) {
-            console.error('Error loading learner stats:', error);
+    // Function to calculate learner stats from loaded data
+    function calculateLearnerStats() {
+        if (!learners || learners.length === 0) {
+            // Set all stats to 0 if no learners
+            document.getElementById('total-learners').textContent = '0';
+            document.getElementById('active-learners').textContent = '0';
+            document.getElementById('at-risk-learners').textContent = '0';
+            document.getElementById('completed-learners').textContent = '0';
+            return;
         }
+        
+        const totalLearners = learners.length;
+        let activeLearners = 0;
+        let atRiskLearners = 0;
+        let completedLearners = 0;
+        
+        learners.forEach(learner => {
+            // Count by status
+            if (learner.status === 'On Track') {
+                activeLearners++;
+            } else if (learner.status === 'At Risk') {
+                atRiskLearners++;
+            } else if (learner.status === 'Completed') {
+                completedLearners++;
+            }
+            // Note: 'Will Drop Off' learners are not counted as active, at-risk, or completed
+        });
+        
+        // Update the display
+        document.getElementById('total-learners').textContent = totalLearners.toLocaleString();
+        document.getElementById('active-learners').textContent = activeLearners.toLocaleString();
+        document.getElementById('at-risk-learners').textContent = atRiskLearners.toLocaleString();
+        document.getElementById('completed-learners').textContent = completedLearners.toLocaleString();
     }
 
     // Function to filter learners
@@ -253,8 +308,10 @@
                     </div>
                     <div style="font-size: 12px; margin-top: 5px;">${learner.progress}%</div>
                 </td>
-                <td style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray);" class="${riskClass}">
-                    ${learner.risk_level.charAt(0).toUpperCase() + learner.risk_level.slice(1)} Risk
+                <td style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray);" class="status-${learner.status.toLowerCase().replace(' ', '-')}">
+                    <span class="status-badge status-${learner.status.toLowerCase().replace(' ', '-')}" style="padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 500;">
+                        ${learner.status}
+                    </span>
                 </td>
                 <td style="padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--light-gray);">${lastActive}</td>
                 <td style="padding: 12px 15px; text-align: center; border-bottom: 1px solid var(--light-gray);">
