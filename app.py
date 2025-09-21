@@ -661,31 +661,62 @@ def api_analytics():
         cursor.execute(analytics_query, params)
         analytics = cursor.fetchone()
         
-        # Get engagement distribution
+        # Get simplified engagement distribution
         engagement_query = f"""
             SELECT 
-                CASE 
-                    WHEN (COALESCE(SUM(la.total_duration)/3600.0, 0) + 
-                          COALESCE(COUNT(CASE WHEN ad.assignment_status = 'Submitted' THEN 1 END), 0) * 5 +
-                          COALESCE(COUNT(CASE WHEN qd.quiz_status = 'Attempted' THEN 1 END), 0) * 3 +
-                          COALESCE(COUNT(CASE WHEN ls.attendance_status = 'Present' THEN 1 END), 0) * 7) >= 70 THEN 'On Track'
-                    WHEN (COALESCE(SUM(la.total_duration)/3600.0, 0) + 
-                          COALESCE(COUNT(CASE WHEN ad.assignment_status = 'Submitted' THEN 1 END), 0) * 5 +
-                          COALESCE(COUNT(CASE WHEN qd.quiz_status = 'Attempted' THEN 1 END), 0) * 3 +
-                          COALESCE(COUNT(CASE WHEN ls.attendance_status = 'Present' THEN 1 END), 0) * 7) >= 40 THEN 'At Risk'
-                    ELSE 'Will Drop Off'
-                END as status,
+                'On Track' as status,
                 COUNT(*) as count
             FROM Learners l
             {base_filter}
-            LEFT JOIN Login_Activity la ON l.learner_id = la.learner_id
-            LEFT JOIN Assignment_Details ad ON l.learner_id = ad.learner_id
-            LEFT JOIN Quiz_Details qd ON l.learner_id = qd.learner_id
-            LEFT JOIN Live_Session ls ON l.learner_id = ls.learner_id
-            GROUP BY l.learner_id
+            WHERE l.total_engagement_score >= 70
+            UNION ALL
+            SELECT 
+                'At Risk' as status,
+                COUNT(*) as count
+            FROM Learners l
+            {base_filter}
+            WHERE l.total_engagement_score >= 40 AND l.total_engagement_score < 70
+            UNION ALL
+            SELECT 
+                'Will Drop Off' as status,
+                COUNT(*) as count
+            FROM Learners l
+            {base_filter}
+            WHERE l.total_engagement_score < 40 OR l.total_engagement_score IS NULL
         """
         
-        cursor.execute(engagement_query, params)
+        # Execute queries with correct parameters for each UNION
+        if user['role'] == 'Super Admin':
+            cursor.execute(engagement_query.replace(base_filter, ''))
+        else:
+            # For coordinators, need to execute the full query with proper JOIN conditions
+            full_engagement_query = f"""
+                SELECT 
+                    'On Track' as status,
+                    COUNT(*) as count
+                FROM Learners l
+                JOIN Cohorts co ON l.cohort_id = co.cohort_id
+                JOIN Courses c ON co.course_id = c.course_id
+                WHERE c.course_id IN ({','.join('?' * len(user_courses))}) AND l.total_engagement_score >= 70
+                UNION ALL
+                SELECT 
+                    'At Risk' as status,
+                    COUNT(*) as count
+                FROM Learners l
+                JOIN Cohorts co ON l.cohort_id = co.cohort_id
+                JOIN Courses c ON co.course_id = c.course_id
+                WHERE c.course_id IN ({','.join('?' * len(user_courses))}) AND l.total_engagement_score >= 40 AND l.total_engagement_score < 70
+                UNION ALL
+                SELECT 
+                    'Will Drop Off' as status,
+                    COUNT(*) as count
+                FROM Learners l
+                JOIN Cohorts co ON l.cohort_id = co.cohort_id
+                JOIN Courses c ON co.course_id = c.course_id
+                WHERE c.course_id IN ({','.join('?' * len(user_courses))}) AND (l.total_engagement_score < 40 OR l.total_engagement_score IS NULL)
+            """
+            cursor.execute(full_engagement_query, user_courses + user_courses + user_courses)
+            
         engagement_data = cursor.fetchall()
         
         # Get daily activity trends
