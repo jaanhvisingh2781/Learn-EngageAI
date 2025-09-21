@@ -1,10 +1,13 @@
 #!/bin/bash
 
-# Check if gunicorn is available, otherwise use python directly
+# Start the simple Flask app
+echo "Starting LearnEngage AI..."
+
+# Try gunicorn first, fallback to python
 if command -v gunicorn &> /dev/null; then
     echo "Starting with Gunicorn..."
-    gunicorn --bind 0.0.0.0:$PORT app:app
+    gunicorn --bind 0.0.0.0:$PORT app_simple:app --timeout 120
 else
-    echo "Gunicorn not found, starting with Python..."
-    python app.py
+    echo "Starting with Python..."
+    python app_simple.py
 fi

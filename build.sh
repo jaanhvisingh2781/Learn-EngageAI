@@ -1,19 +1,20 @@
 #!/bin/bash
 
-# Upgrade pip first
+# Simple, reliable build script for Render
+echo "Starting build process..."
+
+# Upgrade pip
 pip install --upgrade pip
 
-# Try main requirements, fall back to minimal if it fails
-echo "Attempting to install main requirements..."
-if pip install -r requirements.txt --no-cache-dir; then
-    echo "Main requirements installed successfully"
-else
-    echo "Main requirements failed, trying minimal requirements..."
-    pip install -r requirements_minimal.txt --no-cache-dir
-fi
+# Install dependencies
+echo "Installing Python dependencies..."
+pip install -r requirements.txt --no-cache-dir
 
-# Verify Flask installation
-python -c "import flask; print(f'Flask version: {flask.__version__}')"
+# Verify installation
+python -c "import flask; print('Flask installed successfully')"
 
 # Initialize the database
+echo "Initializing database..."
 python db.py
+
+echo "Build completed successfully!"
