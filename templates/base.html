@@ -543,13 +543,24 @@
             </div>
             <div class="user-profile">
                 <div class="user-info">
-                    <div class="user-avatar">AD</div>
+                    {% if user %}
+                    <div class="user-avatar">{{ user.username[:2].upper() }}</div>
                     <div class="user-details">
-                        <div>Admin User</div>
-                        <small>Administrator</small>
+                        <div>{{ user.username }}</div>
+                        <small>{{ user.role }}</small>
+                        {% if user.assigned_courses and user.assigned_courses != 'ALL' %}
+                        <small style="display: block; font-size: 10px; color: #999;">{{ user.assigned_courses }}</small>
+                        {% endif %}
                     </div>
+                    {% else %}
+                    <div class="user-avatar">U</div>
+                    <div class="user-details">
+                        <div>User</div>
+                        <small>Guest</small>
+                    </div>
+                    {% endif %}
                 </div>
-                <button class="logout-btn" onclick="logout()">
+                <button class="logout-btn" onclick="logout()" title="Logout">
                     <i class="fas fa-sign-out-alt"></i>
                 </button>
             </div>

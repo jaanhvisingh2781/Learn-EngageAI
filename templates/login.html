@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - LearnEngage AI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #B22222 0%, #8B0000 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-container {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 420px;
+            margin: 2rem;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #B22222, #8B0000);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+        }
+
+        .logo i {
+            color: white;
+            font-size: 2rem;
+        }
+
+        h1 {
+            color: #2c3e50;
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            color: #2c3e50;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 1rem 1rem 1rem 3rem;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+
+        input[type="text"]:focus, input[type="password"]:focus {
+            outline: none;
+            border-color: #B22222;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(178, 34, 34, 0.1);
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #7f8c8d;
+            font-size: 1.1rem;
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, #B22222, #8B0000);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 1.5rem;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(178, 34, 34, 0.3);
+        }
+
+        .login-btn:active {
+            transform: translateY(0);
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .alert-error {
+            background: #fee;
+            color: #c53030;
+            border: 1px solid #fed7d7;
+        }
+
+        .alert-success {
+            background: #f0fff4;
+            color: #25855a;
+            border: 1px solid #9ae6b4;
+        }
+
+        .alert-info {
+            background: #ebf8ff;
+            color: #2a69ac;
+            border: 1px solid #90cdf4;
+        }
+
+        .demo-accounts {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-top: 2rem;
+        }
+
+        .demo-accounts h3 {
+            color: #2c3e50;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .account-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .account-role {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .account-creds {
+            color: #7f8c8d;
+            font-family: 'Courier New', monospace;
+        }
+
+        .quick-login {
+            background: #e3f2fd;
+            color: #1565c0;
+            border: none;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .quick-login:hover {
+            background: #bbdefb;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 2rem;
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <div class="logo">
+                <i class="fas fa-graduation-cap"></i>
+            </div>
+            <h1>LearnEngage AI</h1>
+            <p class="subtitle">Sign in to access your dashboard</p>
+        </div>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'error' if category == 'error' else category }}">
+                        <i class="fas fa-{{ 'exclamation-circle' if category == 'error' else 'check-circle' if category == 'success' else 'info-circle' }}"></i>
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" id="loginForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <div class="input-wrapper">
+                    <i class="fas fa-user input-icon"></i>
+                    <input type="text" id="username" name="username" required autocomplete="username">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <div class="input-wrapper">
+                    <i class="fas fa-lock input-icon"></i>
+                    <input type="password" id="password" name="password" required autocomplete="current-password">
+                </div>
+            </div>
+
+            <button type="submit" class="login-btn">
+                <i class="fas fa-sign-in-alt"></i>
+                Sign In
+            </button>
+        </form>
+
+        <!-- Demo Accounts -->
+        <div class="demo-accounts">
+            <h3>
+                <i class="fas fa-key"></i>
+                Demo Accounts
+            </h3>
+            
+            <div class="account-item">
+                <div>
+                    <div class="account-role">Super Admin</div>
+                    <div class="account-creds">superadmin / admin123</div>
+                </div>
+                <button class="quick-login" onclick="quickLogin('superadmin', 'admin123')">
+                    <i class="fas fa-bolt"></i> Login
+                </button>
+            </div>
+
+            <div class="account-item">
+                <div>
+                    <div class="account-role">Coordinator (CR101, CS201)</div>
+                    <div class="account-creds">coordinator1 / coord1</div>
+                </div>
+                <button class="quick-login" onclick="quickLogin('coordinator1', 'coord1')">
+                    <i class="fas fa-bolt"></i> Login
+                </button>
+            </div>
+
+            <div class="account-item">
+                <div>
+                    <div class="account-role">Coordinator (DS301, AI401)</div>
+                    <div class="account-creds">coordinator2 / coord2</div>
+                </div>
+                <button class="quick-login" onclick="quickLogin('coordinator2', 'coord2')">
+                    <i class="fas fa-bolt"></i> Login
+                </button>
+            </div>
+
+            <div class="account-item">
+                <div>
+                    <div class="account-role">Coordinator (ML501, WEB601)</div>
+                    <div class="account-creds">coordinator3 / coord3</div>
+                </div>
+                <button class="quick-login" onclick="quickLogin('coordinator3', 'coord3')">
+                    <i class="fas fa-bolt"></i> Login
+                </button>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>© 2025 LearnEngage AI. Secure access to learner analytics.</p>
+        </div>
+    </div>
+
+    <script>
+        function quickLogin(username, password) {
+            document.getElementById('username').value = username;
+            document.getElementById('password').value = password;
+            document.getElementById('loginForm').submit();
+        }
+
+        // Add some subtle animations
+        document.addEventListener('DOMContentLoaded', function() {
+            const inputs = document.querySelectorAll('input');
+            inputs.forEach(input => {
+                input.addEventListener('focus', function() {
+                    this.parentElement.style.transform = 'scale(1.02)';
+                });
+                input.addEventListener('blur', function() {
+                    this.parentElement.style.transform = 'scale(1)';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
