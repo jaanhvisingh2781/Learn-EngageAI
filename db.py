@@ -496,5 +496,5 @@ def init_db():
     conn.close()
 # Usage
 if __name__ == "__main__":
-    db_path = "engagement_hackathon.db"  # Replace with your database path
+    db_path = "learnengage.db"  # Replace with your database path
     generate_random_data(db_path)

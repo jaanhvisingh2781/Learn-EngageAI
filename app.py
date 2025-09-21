@@ -614,21 +614,285 @@ def api_learners():
         return jsonify([])
 
 @app.route('/api/analytics')
+@login_required
 def api_analytics():
-    return jsonify({
-        'avg_engagement': 72.5,
-        'completion_rate': 68.2,
-        'retention_rate': 85.7,
-        'engagement_trend': 5.2,
-        'engagement_by_day': {
-            'labels': ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-            'values': [65, 59, 70, 65, 72, 68, 74]
-        },
-        'activity_distribution': {
-            'labels': ['Login', 'Assignments', 'Quizzes', 'Sessions'],
-            'values': [35, 25, 20, 20]
-        }
-    })
+    user = session['user']
+    user_courses = get_user_courses()
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Build query based on user role
+        if user['role'] == 'Super Admin':
+            base_filter = ""
+            params = []
+        else:
+            placeholders = ','.join('?' * len(user_courses))
+            base_filter = f"""
+                JOIN Cohorts co ON l.cohort_id = co.cohort_id
+                JOIN Courses c ON co.course_id = c.course_id
+                WHERE c.course_id IN ({placeholders})
+            """
+            params = user_courses
+        
+        # Get comprehensive analytics
+        analytics_query = f"""
+            SELECT 
+                COUNT(DISTINCT l.learner_id) as total_learners,
+                COUNT(DISTINCT ad.assignment_id) as total_assignments,
+                COUNT(DISTINCT CASE WHEN ad.assignment_status = 'Submitted' THEN ad.assignment_id END) as completed_assignments,
+                AVG(ad.assignment_score) as avg_assignment_score,
+                COUNT(DISTINCT qd.quiz_id) as total_quizzes,
+                COUNT(DISTINCT CASE WHEN qd.quiz_status = 'Attempted' THEN qd.quiz_id END) as attempted_quizzes,
+                AVG(qd.quiz_score) as avg_quiz_score,
+                COUNT(DISTINCT ls.session_id) as total_sessions,
+                COUNT(DISTINCT CASE WHEN ls.attendance_status = 'Present' THEN ls.session_id END) as attended_sessions,
+                SUM(la.total_duration) as total_login_time,
+                COUNT(DISTINCT la.login_id) as total_logins
+            FROM Learners l
+            {base_filter}
+            LEFT JOIN Login_Activity la ON l.learner_id = la.learner_id
+            LEFT JOIN Assignment_Details ad ON l.learner_id = ad.learner_id
+            LEFT JOIN Quiz_Details qd ON l.learner_id = qd.learner_id
+            LEFT JOIN Live_Session ls ON l.learner_id = ls.learner_id
+        """
+        
+        cursor.execute(analytics_query, params)
+        analytics = cursor.fetchone()
+        
+        # Get engagement distribution
+        engagement_query = f"""
+            SELECT 
+                CASE 
+                    WHEN (COALESCE(SUM(la.total_duration)/3600.0, 0) + 
+                          COALESCE(COUNT(CASE WHEN ad.assignment_status = 'Submitted' THEN 1 END), 0) * 5 +
+                          COALESCE(COUNT(CASE WHEN qd.quiz_status = 'Attempted' THEN 1 END), 0) * 3 +
+                          COALESCE(COUNT(CASE WHEN ls.attendance_status = 'Present' THEN 1 END), 0) * 7) >= 70 THEN 'On Track'
+                    WHEN (COALESCE(SUM(la.total_duration)/3600.0, 0) + 
+                          COALESCE(COUNT(CASE WHEN ad.assignment_status = 'Submitted' THEN 1 END), 0) * 5 +
+                          COALESCE(COUNT(CASE WHEN qd.quiz_status = 'Attempted' THEN 1 END), 0) * 3 +
+                          COALESCE(COUNT(CASE WHEN ls.attendance_status = 'Present' THEN 1 END), 0) * 7) >= 40 THEN 'At Risk'
+                    ELSE 'Will Drop Off'
+                END as status,
+                COUNT(*) as count
+            FROM Learners l
+            {base_filter}
+            LEFT JOIN Login_Activity la ON l.learner_id = la.learner_id
+            LEFT JOIN Assignment_Details ad ON l.learner_id = ad.learner_id
+            LEFT JOIN Quiz_Details qd ON l.learner_id = qd.learner_id
+            LEFT JOIN Live_Session ls ON l.learner_id = ls.learner_id
+            GROUP BY l.learner_id
+        """
+        
+        cursor.execute(engagement_query, params)
+        engagement_data = cursor.fetchall()
+        
+        # Get daily activity trends
+        trend_query = f"""
+            SELECT 
+                strftime('%w', la.login_time) as day_of_week,
+                AVG(la.total_duration/3600.0) as avg_hours
+            FROM Learners l
+            {base_filter}
+            LEFT JOIN Login_Activity la ON l.learner_id = la.learner_id
+            WHERE la.login_time IS NOT NULL
+            GROUP BY strftime('%w', la.login_time)
+            ORDER BY day_of_week
+        """
+        
+        cursor.execute(trend_query, params)
+        trend_data = cursor.fetchall()
+        
+        conn.close()
+        
+        # Process results
+        completion_rate = round((analytics['completed_assignments'] / analytics['total_assignments'] * 100) if analytics['total_assignments'] else 0, 1)
+        quiz_attempt_rate = round((analytics['attempted_quizzes'] / analytics['total_quizzes'] * 100) if analytics['total_quizzes'] else 0, 1)
+        attendance_rate = round((analytics['attended_sessions'] / analytics['total_sessions'] * 100) if analytics['total_sessions'] else 0, 1)
+        avg_engagement = round((analytics['avg_assignment_score'] or 0 + analytics['avg_quiz_score'] or 0) / 2, 1)
+        
+        # Format engagement distribution
+        status_counts = {'On Track': 0, 'At Risk': 0, 'Will Drop Off': 0}
+        for row in engagement_data:
+            status_counts[row['status']] += row['count']
+        
+        # Format trend data
+        days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+        daily_engagement = [0] * 7
+        for row in trend_data:
+            if row['day_of_week'] is not None:
+                daily_engagement[int(row['day_of_week'])] = round(row['avg_hours'] or 0, 1)
+        
+        return jsonify({
+            'total_learners': analytics['total_learners'] or 0,
+            'avg_engagement': avg_engagement,
+            'completion_rate': completion_rate,
+            'quiz_attempt_rate': quiz_attempt_rate,
+            'attendance_rate': attendance_rate,
+            'total_login_hours': round((analytics['total_login_time'] or 0) / 3600, 1),
+            'engagement_distribution': {
+                'labels': ['On Track', 'At Risk', 'Will Drop Off'],
+                'values': [status_counts['On Track'], status_counts['At Risk'], status_counts['Will Drop Off']]
+            },
+            'engagement_by_day': {
+                'labels': days,
+                'values': daily_engagement
+            },
+            'activity_distribution': {
+                'labels': ['Login Hours', 'Assignments', 'Quizzes', 'Sessions'],
+                'values': [
+                    round((analytics['total_login_time'] or 0) / 3600, 1),
+                    analytics['completed_assignments'] or 0,
+                    analytics['attempted_quizzes'] or 0,
+                    analytics['attended_sessions'] or 0
+                ]
+            }
+        })
+        
+    except Exception as e:
+        print(f"Analytics API error: {e}")
+        return jsonify({
+            'total_learners': 0,
+            'avg_engagement': 0,
+            'completion_rate': 0,
+            'quiz_attempt_rate': 0,
+            'attendance_rate': 0,
+            'total_login_hours': 0,
+            'engagement_distribution': {'labels': [], 'values': []},
+            'engagement_by_day': {'labels': days, 'values': [0] * 7},
+            'activity_distribution': {'labels': [], 'values': []}
+        })
+# API endpoint for tickets
+@app.route('/api/tickets')
+@login_required
+def api_tickets():
+    user = session['user']
+    user_courses = get_user_courses()
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        if user['role'] == 'Super Admin':
+            query = """
+                SELECT t.ticket_id, t.subject, t.description, t.priority, t.status, 
+                       t.created_at, t.resolved_at, t.feedback, t.satisfied,
+                       l.name as learner_name, l.email as learner_email,
+                       c.course_name
+                FROM Ticket_Details t
+                JOIN Learners l ON t.learner_id = l.learner_id
+                LEFT JOIN Cohorts co ON l.cohort_id = co.cohort_id
+                LEFT JOIN Courses c ON co.course_id = c.course_id
+                ORDER BY t.created_at DESC
+                LIMIT 100
+            """
+            cursor.execute(query)
+        else:
+            placeholders = ','.join('?' * len(user_courses))
+            query = f"""
+                SELECT t.ticket_id, t.subject, t.description, t.priority, t.status, 
+                       t.created_at, t.resolved_at, t.feedback, t.satisfied,
+                       l.name as learner_name, l.email as learner_email,
+                       c.course_name
+                FROM Ticket_Details t
+                JOIN Learners l ON t.learner_id = l.learner_id
+                JOIN Cohorts co ON l.cohort_id = co.cohort_id
+                JOIN Courses c ON co.course_id = c.course_id
+                WHERE c.course_id IN ({placeholders})
+                ORDER BY t.created_at DESC
+                LIMIT 100
+            """
+            cursor.execute(query, user_courses)
+            
+        tickets = cursor.fetchall()
+        conn.close()
+        
+        result = []
+        for ticket in tickets:
+            result.append({
+                'id': ticket['ticket_id'],
+                'subject': ticket['subject'],
+                'description': ticket['description'],
+                'priority': ticket['priority'],
+                'status': ticket['status'],
+                'created_at': ticket['created_at'],
+                'resolved_at': ticket['resolved_at'],
+                'learner_name': ticket['learner_name'],
+                'learner_email': ticket['learner_email'],
+                'course': ticket['course_name'] or 'N/A',
+                'feedback': ticket['feedback'],
+                'satisfied': ticket['satisfied']
+            })
+            
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"Tickets API error: {e}")
+        return jsonify([])
+
+# API endpoint for interventions/nudges
+@app.route('/api/interventions')
+@login_required
+def api_interventions():
+    user = session['user']
+    user_courses = get_user_courses()
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        if user['role'] == 'Super Admin':
+            query = """
+                SELECT n.nudge_id, n.nudge_type, n.message, n.timestamp, n.status, n.channel,
+                       l.name as learner_name, l.email as learner_email,
+                       c.course_name
+                FROM Nudge_Logs n
+                JOIN Learners l ON n.learner_id = l.learner_id
+                LEFT JOIN Cohorts co ON l.cohort_id = co.cohort_id
+                LEFT JOIN Courses c ON co.course_id = c.course_id
+                ORDER BY n.timestamp DESC
+                LIMIT 100
+            """
+            cursor.execute(query)
+        else:
+            placeholders = ','.join('?' * len(user_courses))
+            query = f"""
+                SELECT n.nudge_id, n.nudge_type, n.message, n.timestamp, n.status, n.channel,
+                       l.name as learner_name, l.email as learner_email,
+                       c.course_name
+                FROM Nudge_Logs n
+                JOIN Learners l ON n.learner_id = l.learner_id
+                JOIN Cohorts co ON l.cohort_id = co.cohort_id
+                JOIN Courses c ON co.course_id = c.course_id
+                WHERE c.course_id IN ({placeholders})
+                ORDER BY n.timestamp DESC
+                LIMIT 100
+            """
+            cursor.execute(query, user_courses)
+            
+        interventions = cursor.fetchall()
+        conn.close()
+        
+        result = []
+        for intervention in interventions:
+            result.append({
+                'id': intervention['nudge_id'],
+                'type': intervention['nudge_type'],
+                'message': intervention['message'],
+                'timestamp': intervention['timestamp'],
+                'status': intervention['status'],
+                'channel': intervention['channel'],
+                'learner_name': intervention['learner_name'],
+                'learner_email': intervention['learner_email'],
+                'course': intervention['course_name'] or 'N/A'
+            })
+            
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"Interventions API error: {e}")
+        return jsonify([])
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
