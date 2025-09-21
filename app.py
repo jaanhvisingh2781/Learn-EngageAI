@@ -58,6 +58,20 @@ def get_user_courses():
         # Program coordinator can only see assigned courses
         return user['assigned_courses'].split(',')
 
+def get_course_names(course_ids):
+    """Get course names for given course IDs"""
+    if not course_ids:
+        return []
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    placeholders = ','.join('?' * len(course_ids))
+    cursor.execute(f"SELECT course_id, course_name FROM Courses WHERE course_id IN ({placeholders})", course_ids)
+    courses = cursor.fetchall()
+    conn.close()
+    
+    return [{'id': course['course_id'], 'name': course['course_name']} for course in courses]
+
 @app.route('/')
 def index():
     if 'user' in session:
@@ -93,48 +107,223 @@ def dashboard():
     user = session['user']
     user_courses = get_user_courses()
     
-    # Get stats for dashboard based on user role
+    # Get REAL stats for dashboard based on user role and actual data
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
         if user['role'] == 'Super Admin':
-            # Super admin sees all learners
-            cursor.execute("SELECT COUNT(*) as total FROM Learners")
+            # Super admin sees all learners with comprehensive stats
+            dashboard_query = """
+                SELECT 
+                    COUNT(DISTINCT l.learner_id) as total_learners,
+                    COUNT(DISTINCT c.course_id) as total_courses,
+                    COUNT(DISTINCT co.cohort_id) as total_cohorts,
+                    SUM(la.total_duration) as total_login_time,
+                    COUNT(DISTINCT ad.assignment_id) as total_assignments,
+                    COUNT(DISTINCT CASE WHEN ad.assignment_status = 'Submitted' THEN ad.assignment_id END) as completed_assignments,
+                    COUNT(DISTINCT qd.quiz_id) as total_quizzes,
+                    COUNT(DISTINCT CASE WHEN qd.quiz_status = 'Attempted' THEN qd.quiz_id END) as attempted_quizzes,
+                    COUNT(DISTINCT ls.session_id) as total_sessions,
+                    COUNT(DISTINCT CASE WHEN ls.attendance_status = 'Present' THEN ls.session_id END) as attended_sessions,
+                    COUNT(DISTINCT td.ticket_id) as total_tickets,
+                    COUNT(DISTINCT CASE WHEN td.status = 'Resolved' THEN td.ticket_id END) as resolved_tickets
+                FROM Learners l
+                LEFT JOIN Cohorts co ON l.cohort_id = co.cohort_id
+                LEFT JOIN Courses c ON co.course_id = c.course_id
+                LEFT JOIN Login_Activity la ON l.learner_id = la.learner_id
+                LEFT JOIN Assignment_Details ad ON l.learner_id = ad.learner_id
+                LEFT JOIN Quiz_Details qd ON l.learner_id = qd.learner_id
+                LEFT JOIN Live_Session ls ON l.learner_id = ls.learner_id
+                LEFT JOIN Ticket_Details td ON l.learner_id = td.learner_id
+            """
+            cursor.execute(dashboard_query)
         else:
-            # Program coordinator sees only learners from their assigned courses
+            # Program coordinator sees only their assigned courses data
             placeholders = ','.join('?' * len(user_courses))
-            cursor.execute(f"""
-                SELECT COUNT(*) as total 
-                FROM Learners l 
-                JOIN Cohorts c ON l.cohort_id = c.cohort_id 
+            dashboard_query = f"""
+                SELECT 
+                    COUNT(DISTINCT l.learner_id) as total_learners,
+                    COUNT(DISTINCT c.course_id) as total_courses,
+                    COUNT(DISTINCT co.cohort_id) as total_cohorts,
+                    SUM(la.total_duration) as total_login_time,
+                    COUNT(DISTINCT ad.assignment_id) as total_assignments,
+                    COUNT(DISTINCT CASE WHEN ad.assignment_status = 'Submitted' THEN ad.assignment_id END) as completed_assignments,
+                    COUNT(DISTINCT qd.quiz_id) as total_quizzes,
+                    COUNT(DISTINCT CASE WHEN qd.quiz_status = 'Attempted' THEN qd.quiz_id END) as attempted_quizzes,
+                    COUNT(DISTINCT ls.session_id) as total_sessions,
+                    COUNT(DISTINCT CASE WHEN ls.attendance_status = 'Present' THEN ls.session_id END) as attended_sessions,
+                    COUNT(DISTINCT td.ticket_id) as total_tickets,
+                    COUNT(DISTINCT CASE WHEN td.status = 'Resolved' THEN td.ticket_id END) as resolved_tickets
+                FROM Learners l
+                JOIN Cohorts co ON l.cohort_id = co.cohort_id
+                JOIN Courses c ON co.course_id = c.course_id
+                LEFT JOIN Login_Activity la ON l.learner_id = la.learner_id
+                LEFT JOIN Assignment_Details ad ON l.learner_id = ad.learner_id
+                LEFT JOIN Quiz_Details qd ON l.learner_id = qd.learner_id
+                LEFT JOIN Live_Session ls ON l.learner_id = ls.learner_id
+                LEFT JOIN Ticket_Details td ON l.learner_id = td.learner_id
                 WHERE c.course_id IN ({placeholders})
-            """, user_courses)
+            """
+            cursor.execute(dashboard_query, user_courses)
             
-        total_learners = cursor.fetchone()['total']
+        dashboard_data = cursor.fetchone()
+        
+        # Get engagement distribution for the coordinator's learners
+        if user['role'] == 'Super Admin':
+            engagement_query = """
+                SELECT l.learner_id,
+                       COALESCE(SUM(la.total_duration)/3600.0, 0) as login_hours,
+                       COALESCE(COUNT(CASE WHEN ad.assignment_status = 'Submitted' THEN 1 END), 0) as completed_assignments,
+                       COALESCE(COUNT(CASE WHEN qd.quiz_status = 'Attempted' THEN 1 END), 0) as attempted_quizzes,
+                       COALESCE(COUNT(CASE WHEN ls.attendance_status = 'Present' THEN 1 END), 0) as attended_sessions
+                FROM Learners l
+                LEFT JOIN Login_Activity la ON l.learner_id = la.learner_id
+                LEFT JOIN Assignment_Details ad ON l.learner_id = ad.learner_id
+                LEFT JOIN Quiz_Details qd ON l.learner_id = qd.learner_id
+                LEFT JOIN Live_Session ls ON l.learner_id = ls.learner_id
+                GROUP BY l.learner_id
+            """
+            cursor.execute(engagement_query)
+        else:
+            engagement_query = f"""
+                SELECT l.learner_id,
+                       COALESCE(SUM(la.total_duration)/3600.0, 0) as login_hours,
+                       COALESCE(COUNT(CASE WHEN ad.assignment_status = 'Submitted' THEN 1 END), 0) as completed_assignments,
+                       COALESCE(COUNT(CASE WHEN qd.quiz_status = 'Attempted' THEN 1 END), 0) as attempted_quizzes,
+                       COALESCE(COUNT(CASE WHEN ls.attendance_status = 'Present' THEN 1 END), 0) as attended_sessions
+                FROM Learners l
+                JOIN Cohorts co ON l.cohort_id = co.cohort_id
+                JOIN Courses c ON co.course_id = c.course_id
+                LEFT JOIN Login_Activity la ON l.learner_id = la.learner_id
+                LEFT JOIN Assignment_Details ad ON l.learner_id = ad.learner_id
+                LEFT JOIN Quiz_Details qd ON l.learner_id = qd.learner_id
+                LEFT JOIN Live_Session ls ON l.learner_id = ls.learner_id
+                WHERE c.course_id IN ({placeholders})
+                GROUP BY l.learner_id
+            """
+            cursor.execute(engagement_query, user_courses)
+        
+        learner_engagement = cursor.fetchall()
+        
+        # Calculate real engagement distribution
+        on_track = at_risk = drop_off = 0
+        engagement_scores = []
+        
+        for learner in learner_engagement:
+            # Real engagement calculation
+            login_score = min(learner['login_hours'], 10)
+            assignment_score = learner['completed_assignments'] * 5
+            quiz_score = learner['attempted_quizzes'] * 3
+            attendance_score = learner['attended_sessions'] * 7
+            
+            total_engagement = login_score + assignment_score + quiz_score + attendance_score
+            engagement_percentage = min(total_engagement, 100)
+            engagement_scores.append(engagement_percentage)
+            
+            if engagement_percentage >= 70:
+                on_track += 1
+            elif engagement_percentage >= 40:
+                at_risk += 1
+            else:
+                drop_off += 1
+        
         conn.close()
         
+        # Real statistics
         stats = {
-            'total_learners': total_learners,
-            'on_track': int(total_learners * 0.6),
-            'at_risk': int(total_learners * 0.3),
-            'drop_off': int(total_learners * 0.1)
+            'total_learners': dashboard_data['total_learners'] or 0,
+            'total_courses': dashboard_data['total_courses'] or 0,
+            'total_cohorts': dashboard_data['total_cohorts'] or 0,
+            'on_track': on_track,
+            'at_risk': at_risk,
+            'drop_off': drop_off,
+            'avg_engagement': round(sum(engagement_scores) / len(engagement_scores), 1) if engagement_scores else 0,
+            'total_login_hours': round((dashboard_data['total_login_time'] or 0) / 3600, 1),
+            'assignment_completion_rate': round(
+                (dashboard_data['completed_assignments'] / dashboard_data['total_assignments'] * 100) 
+                if dashboard_data['total_assignments'] else 0, 1
+            ),
+            'quiz_attempt_rate': round(
+                (dashboard_data['attempted_quizzes'] / dashboard_data['total_quizzes'] * 100) 
+                if dashboard_data['total_quizzes'] else 0, 1
+            ),
+            'session_attendance_rate': round(
+                (dashboard_data['attended_sessions'] / dashboard_data['total_sessions'] * 100) 
+                if dashboard_data['total_sessions'] else 0, 1
+            ),
+            'ticket_resolution_rate': round(
+                (dashboard_data['resolved_tickets'] / dashboard_data['total_tickets'] * 100) 
+                if dashboard_data['total_tickets'] else 100, 1
+            )
         }
+        
+        # Real trend data based on daily login activity
+        trend_query = """
+            SELECT 
+                strftime('%w', login_time) as day_of_week,
+                AVG(total_duration/3600.0) as avg_daily_hours,
+                COUNT(DISTINCT learner_id) as daily_active_users
+            FROM Login_Activity 
+            WHERE login_time IS NOT NULL
+            GROUP BY strftime('%w', login_time)
+            ORDER BY day_of_week
+        """
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(trend_query)
+        trend_raw = cursor.fetchall()
+        conn.close()
+        
+        # Format trend data
+        days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+        daily_engagement = [0] * 7
+        daily_users = [0] * 7
+        
+        for row in trend_raw:
+            day_idx = int(row['day_of_week'] or 0)
+            daily_engagement[day_idx] = round(row['avg_daily_hours'] or 0, 1)
+            daily_users[day_idx] = row['daily_active_users'] or 0
+            
+        trend_data = {
+            'labels': days,
+            'average_engagement': daily_engagement,
+            'at_risk_engagement': [max(0, x-10) for x in daily_engagement],  # Mock at-risk data
+            'daily_active_users': daily_users,
+            'course_info': {
+                'assigned_courses': user_courses,
+                'course_names': get_course_names(user_courses) if user_courses else []
+            }
+        }
+        
     except Exception as e:
         print(f"Dashboard error: {e}")
+        # Fallback stats
         stats = {
-            'total_learners': 100,
-            'on_track': 60,
-            'at_risk': 30,
-            'drop_off': 10
+            'total_learners': 0,
+            'total_courses': len(user_courses),
+            'total_cohorts': 0,
+            'on_track': 0,
+            'at_risk': 0,
+            'drop_off': 0,
+            'avg_engagement': 0,
+            'total_login_hours': 0,
+            'assignment_completion_rate': 0,
+            'quiz_attempt_rate': 0,
+            'session_attendance_rate': 0,
+            'ticket_resolution_rate': 100
         }
-    
-    # Mock trend data for charts
-    trend_data = {
-        'labels': ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-        'average_engagement': [65, 59, 70, 65, 72, 68, 74],
-        'at_risk_engagement': [15, 18, 12, 20, 16, 22, 14]
-    }
+        trend_data = {
+            'labels': ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            'average_engagement': [0] * 7,
+            'at_risk_engagement': [0] * 7,
+            'daily_active_users': [0] * 7,
+            'course_info': {
+                'assigned_courses': user_courses,
+                'course_names': []
+            }
+        }
     
     return render_template('dashboard.html', stats=stats, trend_data=trend_data, user=user)
 
@@ -163,28 +352,122 @@ def tickets():
     return render_template('tickets.html', user=user)
 
 @app.route('/api/dashboard-stats')
+@login_required
 def api_dashboard_stats():
+    user = session['user']
+    user_courses = get_user_courses()
+    
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) as total FROM Learners")
-        total_learners = cursor.fetchone()['total']
+        
+        # Get real learner count and engagement data
+        if user['role'] == 'Super Admin':
+            query = """
+                SELECT 
+                    COUNT(DISTINCT l.learner_id) as total_learners,
+                    AVG(CASE 
+                        WHEN (COALESCE(SUM(la.total_duration)/3600.0, 0) + 
+                              COALESCE(COUNT(CASE WHEN ad.assignment_status = 'Submitted' THEN 1 END), 0) * 5 +
+                              COALESCE(COUNT(CASE WHEN qd.quiz_status = 'Attempted' THEN 1 END), 0) * 3 +
+                              COALESCE(COUNT(CASE WHEN ls.attendance_status = 'Present' THEN 1 END), 0) * 7) >= 70 THEN 1 ELSE 0 END
+                    ) * 100 as on_track_pct,
+                    AVG(CASE 
+                        WHEN (COALESCE(SUM(la.total_duration)/3600.0, 0) + 
+                              COALESCE(COUNT(CASE WHEN ad.assignment_status = 'Submitted' THEN 1 END), 0) * 5 +
+                              COALESCE(COUNT(CASE WHEN qd.quiz_status = 'Attempted' THEN 1 END), 0) * 3 +
+                              COALESCE(COUNT(CASE WHEN ls.attendance_status = 'Present' THEN 1 END), 0) * 7) >= 40 AND
+                             (COALESCE(SUM(la.total_duration)/3600.0, 0) + 
+                              COALESCE(COUNT(CASE WHEN ad.assignment_status = 'Submitted' THEN 1 END), 0) * 5 +
+                              COALESCE(COUNT(CASE WHEN qd.quiz_status = 'Attempted' THEN 1 END), 0) * 3 +
+                              COALESCE(COUNT(CASE WHEN ls.attendance_status = 'Present' THEN 1 END), 0) * 7) < 70 THEN 1 ELSE 0 END
+                    ) * 100 as at_risk_pct,
+                    AVG(
+                        COALESCE(SUM(la.total_duration)/3600.0, 0) + 
+                        COALESCE(COUNT(CASE WHEN ad.assignment_status = 'Submitted' THEN 1 END), 0) * 5 +
+                        COALESCE(COUNT(CASE WHEN qd.quiz_status = 'Attempted' THEN 1 END), 0) * 3 +
+                        COALESCE(COUNT(CASE WHEN ls.attendance_status = 'Present' THEN 1 END), 0) * 7
+                    ) as avg_engagement
+                FROM Learners l
+                LEFT JOIN Login_Activity la ON l.learner_id = la.learner_id
+                LEFT JOIN Assignment_Details ad ON l.learner_id = ad.learner_id
+                LEFT JOIN Quiz_Details qd ON l.learner_id = qd.learner_id
+                LEFT JOIN Live_Session ls ON l.learner_id = ls.learner_id
+                GROUP BY l.learner_id
+            """
+            cursor.execute(query)
+        else:
+            placeholders = ','.join('?' * len(user_courses))
+            query = f"""
+                SELECT 
+                    COUNT(DISTINCT l.learner_id) as total_learners,
+                    AVG(CASE 
+                        WHEN (COALESCE(SUM(la.total_duration)/3600.0, 0) + 
+                              COALESCE(COUNT(CASE WHEN ad.assignment_status = 'Submitted' THEN 1 END), 0) * 5 +
+                              COALESCE(COUNT(CASE WHEN qd.quiz_status = 'Attempted' THEN 1 END), 0) * 3 +
+                              COALESCE(COUNT(CASE WHEN ls.attendance_status = 'Present' THEN 1 END), 0) * 7) >= 70 THEN 1 ELSE 0 END
+                    ) * 100 as on_track_pct,
+                    AVG(CASE 
+                        WHEN (COALESCE(SUM(la.total_duration)/3600.0, 0) + 
+                              COALESCE(COUNT(CASE WHEN ad.assignment_status = 'Submitted' THEN 1 END), 0) * 5 +
+                              COALESCE(COUNT(CASE WHEN qd.quiz_status = 'Attempted' THEN 1 END), 0) * 3 +
+                              COALESCE(COUNT(CASE WHEN ls.attendance_status = 'Present' THEN 1 END), 0) * 7) >= 40 AND
+                             (COALESCE(SUM(la.total_duration)/3600.0, 0) + 
+                              COALESCE(COUNT(CASE WHEN ad.assignment_status = 'Submitted' THEN 1 END), 0) * 5 +
+                              COALESCE(COUNT(CASE WHEN qd.quiz_status = 'Attempted' THEN 1 END), 0) * 3 +
+                              COALESCE(COUNT(CASE WHEN ls.attendance_status = 'Present' THEN 1 END), 0) * 7) < 70 THEN 1 ELSE 0 END
+                    ) * 100 as at_risk_pct,
+                    AVG(
+                        COALESCE(SUM(la.total_duration)/3600.0, 0) + 
+                        COALESCE(COUNT(CASE WHEN ad.assignment_status = 'Submitted' THEN 1 END), 0) * 5 +
+                        COALESCE(COUNT(CASE WHEN qd.quiz_status = 'Attempted' THEN 1 END), 0) * 3 +
+                        COALESCE(COUNT(CASE WHEN ls.attendance_status = 'Present' THEN 1 END), 0) * 7
+                    ) as avg_engagement
+                FROM Learners l
+                JOIN Cohorts co ON l.cohort_id = co.cohort_id
+                JOIN Courses c ON co.course_id = c.course_id
+                LEFT JOIN Login_Activity la ON l.learner_id = la.learner_id
+                LEFT JOIN Assignment_Details ad ON l.learner_id = ad.learner_id
+                LEFT JOIN Quiz_Details qd ON l.learner_id = qd.learner_id
+                LEFT JOIN Live_Session ls ON l.learner_id = ls.learner_id
+                WHERE c.course_id IN ({placeholders})
+                GROUP BY l.learner_id
+            """
+            cursor.execute(query, user_courses)
+            
+        result = cursor.fetchone()
         conn.close()
+        
+        total_learners = result['total_learners'] if result else 0
+        avg_engagement = round(result['avg_engagement'] or 0, 1) if result else 0
+        on_track_pct = round(result['on_track_pct'] or 0, 1) if result else 0
+        at_risk_pct = round(result['at_risk_pct'] or 0, 1) if result else 0
+        will_drop_pct = round(100 - on_track_pct - at_risk_pct, 1)
         
         return jsonify({
             'total_learners': total_learners,
-            'avg_engagement': 72.5,
-            'on_track': int(total_learners * 0.6),
-            'at_risk': int(total_learners * 0.3),
-            'will_drop': int(total_learners * 0.1)
+            'avg_engagement': avg_engagement,
+            'on_track': int(total_learners * on_track_pct / 100),
+            'at_risk': int(total_learners * at_risk_pct / 100),
+            'will_drop': int(total_learners * will_drop_pct / 100),
+            'user_info': {
+                'role': user['role'],
+                'courses': user_courses
+            }
         })
-    except:
+        
+    except Exception as e:
+        print(f"Dashboard stats API error: {e}")
         return jsonify({
-            'total_learners': 100,
-            'avg_engagement': 72.5,
-            'on_track': 60,
-            'at_risk': 30,
-            'will_drop': 10
+            'total_learners': 0,
+            'avg_engagement': 0,
+            'on_track': 0,
+            'at_risk': 0,
+            'will_drop': 0,
+            'user_info': {
+                'role': user.get('role', 'Unknown'),
+                'courses': user_courses
+            }
         })
 
 @app.route('/api/learners')
