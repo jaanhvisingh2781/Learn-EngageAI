@@ -1,20 +1,28 @@
 #!/bin/bash
+set -e  # Exit on any error
 
-# Simple, reliable build script for Render
-echo "Starting build process..."
+echo "=== STARTING BUILD PROCESS ==="
+echo "Python version: $(python --version)"
+echo "Pip version: $(pip --version)"
 
 # Upgrade pip
+echo "Upgrading pip..."
 pip install --upgrade pip
 
-# Install dependencies
-echo "Installing Python dependencies..."
-pip install -r requirements.txt --no-cache-dir
+# Install Flask directly first
+echo "Installing Flask..."
+pip install Flask==2.2.5
 
-# Verify installation
-python -c "import flask; print('Flask installed successfully')"
+# Install gunicorn
+echo "Installing gunicorn..."
+pip install gunicorn==20.1.0
 
-# Initialize the database
+# Verify installations
+echo "Verifying installations..."
+python -c "import flask; print(f'Flask {flask.__version__} installed successfully')"
+
+# Initialize database
 echo "Initializing database..."
 python db.py
 
-echo "Build completed successfully!"
+echo "=== BUILD COMPLETED SUCCESSFULLY ===" 

@@ -1,14 +1,14 @@
 #!/bin/bash
+set -e  # Exit on any error
 
-# Start the Flask app
-echo "Starting LearnEngage AI..."
+echo "=== STARTING LEARNENGAGE AI ==="
 echo "Port: $PORT"
+echo "Python version: $(python --version)"
 
-# Try gunicorn first, fallback to python
-if command -v gunicorn &> /dev/null; then
-    echo "Starting with Gunicorn..."
-    gunicorn --bind 0.0.0.0:$PORT app:app --timeout 120 --workers 1
-else
-    echo "Starting with Python..."
-    python app.py
-fi
+# Verify Flask is installed
+echo "Verifying Flask installation..."
+python -c "import flask; print(f'Flask {flask.__version__} is available')"
+
+# Start the application
+echo "Starting application..."
+python app.py
