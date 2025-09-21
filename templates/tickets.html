@@ -161,7 +161,6 @@
     // DOM Content Loaded
     document.addEventListener('DOMContentLoaded', function() {
         loadTickets();
-        loadTicketStats();
         
         // Add event listeners for search and filters
         document.getElementById('ticketSearch').addEventListener('input', filterTickets);
@@ -177,25 +176,43 @@
         try {
             const response = await fetch('/api/tickets');
             tickets = await response.json();
+            calculateTicketStats(); // Calculate stats after loading tickets
             filterTickets();
         } catch (error) {
             console.error('Error loading tickets:', error);
         }
     }
 
-    // Function to load ticket stats
-    async function loadTicketStats() {
-        try {
-            const response = await fetch('/api/ticket-stats');
-            const stats = await response.json();
-            
-            document.getElementById('total-tickets').textContent = stats.total_tickets.toLocaleString();
-            document.getElementById('open-tickets').textContent = stats.open_tickets.toLocaleString();
-            document.getElementById('pending-tickets').textContent = stats.pending_tickets.toLocaleString();
-            document.getElementById('resolved-tickets').textContent = stats.resolved_tickets.toLocaleString();
-        } catch (error) {
-            console.error('Error loading ticket stats:', error);
+    // Function to calculate ticket stats from loaded data
+    function calculateTicketStats() {
+        if (!tickets || tickets.length === 0) {
+            document.getElementById('total-tickets').textContent = '0';
+            document.getElementById('open-tickets').textContent = '0';
+            document.getElementById('pending-tickets').textContent = '0';
+            document.getElementById('resolved-tickets').textContent = '0';
+            return;
         }
+        
+        const totalTickets = tickets.length;
+        let openTickets = 0;
+        let pendingTickets = 0;
+        let resolvedTickets = 0;
+        
+        tickets.forEach(ticket => {
+            const status = ticket.status.toLowerCase();
+            if (status === 'open') {
+                openTickets++;
+            } else if (status === 'in progress') {
+                pendingTickets++;
+            } else if (status === 'resolved' || status === 'closed') {
+                resolvedTickets++;
+            }
+        });
+        
+        document.getElementById('total-tickets').textContent = totalTickets.toLocaleString();
+        document.getElementById('open-tickets').textContent = openTickets.toLocaleString();
+        document.getElementById('pending-tickets').textContent = pendingTickets.toLocaleString();
+        document.getElementById('resolved-tickets').textContent = resolvedTickets.toLocaleString();
     }
 
     // Function to filter tickets
