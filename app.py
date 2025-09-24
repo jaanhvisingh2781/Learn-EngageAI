@@ -342,7 +342,6 @@ def dashboard():
 @login_required
 def learners():
     user = session['user']
-    user_courses = get_user_courses()
     
     try:
         conn = get_db_connection()
@@ -351,7 +350,9 @@ def learners():
         # Get courses accessible to user for filtering
         if user['role'] == 'Super Admin':
             cursor.execute("SELECT course_id, course_name FROM Courses")
+            user_courses = []
         else:
+            user_courses = get_user_courses()
             placeholders = ','.join('?' * len(user_courses))
             cursor.execute(f"SELECT course_id, course_name FROM Courses WHERE course_id IN ({placeholders})", user_courses)
         
@@ -373,6 +374,147 @@ def learners():
         cohorts = []
         
     return render_template('learners.html', user=user, courses=courses, cohorts=cohorts)
+
+# Learner details page with full history
+@app.route('/learner/<learner_id>')
+@login_required
+def learner_details(learner_id):
+    user = session['user']
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Fetch learner profile
+        cursor.execute("""
+            SELECT l.learner_id, l.name, l.email, l.contact, l.country_region, l.work_ex,
+                   l.cohort_id, l.total_engagement_score
+            FROM Learners l
+            WHERE l.learner_id = ?
+        """, (learner_id,))
+        learner = cursor.fetchone()
+        if not learner:
+            conn.close()
+            return render_template('learner_details.html', user=user, data=None)
+        
+        engagement_score = round(learner['total_engagement_score'] or 0, 1)
+        # Status thresholds consistent with dashboard
+        if engagement_score >= 85:
+            status = 'Completed'
+        elif engagement_score >= 70:
+            status = 'On Track'
+        elif engagement_score >= 40:
+            status = 'At Risk'
+        else:
+            status = 'Will Drop Off'
+        
+        # Login activity (convert minutes to seconds for template formatting)
+        cursor.execute("""
+            SELECT login_time, logout_time, total_duration
+            FROM Login_Activity
+            WHERE learner_id = ?
+            ORDER BY datetime(login_time) DESC
+        """, (learner_id,))
+        logins_raw = cursor.fetchall()
+        login_activity = []
+        for r in logins_raw:
+            mins = r['total_duration'] or 0
+            login_activity.append({
+                'login_time': r['login_time'],
+                'logout_time': r['logout_time'],
+                'total_duration': (mins or 0) * 60  # seconds for template's h/m calc
+            })
+        
+        # Assignments
+        cursor.execute("""
+            SELECT assignment_id, assignment_status, assignment_score, submitted_at
+            FROM Assignment_Details
+            WHERE learner_id = ?
+            ORDER BY datetime(submitted_at) DESC NULLS LAST
+        """, (learner_id,))
+        assignments = cursor.fetchall()
+        
+        # Quizzes
+        cursor.execute("""
+            SELECT quiz_id, quiz_status, quiz_score, attempted_at
+            FROM Quiz_Details
+            WHERE learner_id = ?
+            ORDER BY datetime(attempted_at) DESC NULLS LAST
+        """, (learner_id,))
+        quizzes = cursor.fetchall()
+        
+        # Live Sessions
+        cursor.execute("""
+            SELECT session_id, attendance_status
+            FROM Live_Session
+            WHERE learner_id = ?
+            ORDER BY session_id DESC
+        """, (learner_id,))
+        live_sessions = cursor.fetchall()
+        
+        # Nudge history
+        cursor.execute("""
+            SELECT timestamp, nudge_type, message, status
+            FROM Nudge_Logs
+            WHERE learner_id = ?
+            ORDER BY datetime(timestamp) DESC
+        """, (learner_id,))
+        nudge_history = cursor.fetchall()
+        
+        # Tickets (all, template filters by learner_id)
+        cursor.execute("""
+            SELECT ticket_id, learner_id, subject, priority, status, created_at
+            FROM Ticket_Details
+            ORDER BY datetime(created_at) DESC
+            LIMIT 500
+        """)
+        tickets = cursor.fetchall()
+        conn.close()
+        
+        # Simple recommendations
+        recommendations = []
+        if status == 'Will Drop Off':
+            recommendations = [
+                'Send a personalized mentor connect nudge',
+                'Recommend a short recap module to rebuild momentum',
+                'Schedule a check-in call'
+            ]
+        elif status == 'At Risk':
+            recommendations = [
+                'Send a progress check nudge',
+                'Suggest a peer challenge to boost engagement'
+            ]
+        elif status == 'On Track':
+            recommendations = [
+                'Congratulate the learner and share advanced resources'
+            ]
+        else:  # Completed
+            recommendations = [
+                'Invite the learner to provide feedback',
+                'Share alumni resources'
+            ]
+        
+        data = {
+            'learner': {
+                'learner_id': learner['learner_id'],
+                'name': learner['name'],
+                'email': learner['email'],
+                'contact': learner['contact'],
+                'country_region': learner['country_region'],
+                'cohort_id': learner['cohort_id'],
+            },
+            'engagement_score': engagement_score,
+            'status': status,
+            'login_activity': login_activity,
+            'assignments': assignments,
+            'quizzes': quizzes,
+            'live_sessions': live_sessions,
+            'nudge_history': nudge_history
+        }
+        
+        return render_template('learner_details.html', user=user, data=data, recommendations=recommendations, tickets=tickets)
+    except Exception as e:
+        print(f"Learner details error: {e}")
+        return render_template('learner_details.html', user=user, data=None)
 
 @app.route('/analytics')
 @login_required
