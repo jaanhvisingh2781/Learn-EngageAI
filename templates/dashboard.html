@@ -7,7 +7,7 @@
 {% block page_subtitle %}Welcome back! Here's what's happening with your learners today.{% endblock %}
 
 {% block content %}
-<div class="dashboard-cards" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px;">
+<div class="dashboard-cards">
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
             <h3>Total Learners</h3>
@@ -19,7 +19,7 @@
     
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <h3>On Track</h3>
+            <h3><span class="status-badge status-on-track">On Track</span></h3>
             <i class="fas fa-check-circle" style="font-size: 24px; color: #27ae60;"></i>
         </div>
         <h2 id="on-track-learners" style="font-size: 32px; margin-bottom: 5px; color: #27ae60;">0</h2>
@@ -37,7 +37,16 @@
     
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <h3>Will Drop Off</h3>
+            <h3>Completed</h3>
+            <i class="fas fa-graduation-cap" style="font-size: 24px; color: #9b59b6;"></i>
+        </div>
+        <h2 id="completed-learners" style="font-size: 32px; margin-bottom: 5px; color: #9b59b6;">0</h2>
+        <p style="color: var(--gray); font-size: 14px;">Finished their program</p>
+    </div>
+    
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3><span class="status-badge status-will-drop-off">Will Drop Off</span></h3>
             <i class="fas fa-times-circle" style="font-size: 24px; color: #e74c3c;"></i>
         </div>
         <h2 id="will-drop-off-learners" style="font-size: 32px; margin-bottom: 5px; color: #e74c3c;">0</h2>
@@ -45,10 +54,12 @@
     </div>
 </div>
 
-<div class="quick-stats" style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 30px;">
-    <div class="card">
-        <h3 style="margin-bottom: 20px;">Engagement Trend</h3>
-        <canvas id="engagementChart" height="250"></canvas>
+<div class="quick-stats">
+    <div class="card" style="height: 350px; max-width: 100%; min-width: 0; display: flex; flex-direction: column;">
+        <h3 style="margin-bottom: 20px;">Monthly Engagement Trend</h3>
+        <div style="flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center;">
+            <canvas id="engagementChart" style="max-width: 100%; max-height: 250px; width: 100% !important; height: 250px !important;"></canvas>
+        </div>
     </div>
     
     <div class="card">
@@ -72,7 +83,7 @@
                 <th>Learner</th>
                 <th>Activity</th>
                 <th>Time</th>
-                <th>Status</th>
+                <th style="width: 150px;">Status</th>
             </tr>
         </thead>
         <tbody id="recent-activity-table">
@@ -97,30 +108,18 @@
     // Load dashboard statistics from API
     async function loadDashboardStats() {
         try {
-            const response = await fetch('/api/learners');
-            const learners = await response.json();
+            const response = await fetch('/api/dashboard-stats');
+            const stats = await response.json();
             
-            // Calculate statistics
-            const totalLearners = learners.length;
-            let onTrack = 0, atRisk = 0, willDropOff = 0, completed = 0;
+            // Update dashboard cards from backend-determined counts
+            document.getElementById('total-learners').textContent = (stats.total_learners || 0).toLocaleString();
+            document.getElementById('on-track-learners').textContent = (stats.on_track || 0).toLocaleString();
+            document.getElementById('at-risk-learners').textContent = (stats.at_risk || 0).toLocaleString();
+            document.getElementById('completed-learners').textContent = (stats.completed || 0).toLocaleString();
+            document.getElementById('will-drop-off-learners').textContent = (stats.will_drop || 0).toLocaleString();
             
-            learners.forEach(learner => {
-                switch(learner.status) {
-                    case 'On Track': onTrack++; break;
-                    case 'At Risk': atRisk++; break;
-                    case 'Will Drop Off': willDropOff++; break;
-                    case 'Completed': completed++; break;
-                }
-            });
-            
-            // Update dashboard cards
-            document.getElementById('total-learners').textContent = totalLearners.toLocaleString();
-            document.getElementById('on-track-learners').textContent = onTrack.toLocaleString();
-            document.getElementById('at-risk-learners').textContent = atRisk.toLocaleString();
-            document.getElementById('will-drop-off-learners').textContent = willDropOff.toLocaleString();
-            
-            // Create engagement trend chart with real data
-            createEngagementChart(learners);
+            // Create engagement trend chart (independent fetch)
+            createEngagementChart();
             
             // Load intervention data
             loadInterventionChart();
@@ -130,81 +129,131 @@
         }
     }
     
-    // Create engagement trend chart
-    function createEngagementChart(learners) {
-        const engagementCtx = document.getElementById('engagementChart').getContext('2d');
-        
-        // Generate engagement data by day of week
-        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        const engagementByDay = new Array(7).fill(0);
-        const atRiskByDay = new Array(7).fill(0);
-        const dayCount = new Array(7).fill(0);
-        
-        // Simulate daily engagement based on learner data
-        learners.forEach(learner => {
-            const dayIndex = Math.floor(Math.random() * 7);
-            engagementByDay[dayIndex] += learner.engagement;
-            if (learner.status === 'At Risk') {
-                atRiskByDay[dayIndex] += learner.engagement;
+    // Create engagement trend chart with monthly data
+    async function createEngagementChart(learners) {
+        try {
+            const response = await fetch('/api/monthly-engagement');
+            const monthlyData = await response.json();
+            
+            const engagementCtx = document.getElementById('engagementChart').getContext('2d');
+            
+            if (engagementChart) {
+                engagementChart.destroy();
             }
-            dayCount[dayIndex]++;
-        });
-        
-        // Calculate averages
-        for (let i = 0; i < 7; i++) {
-            if (dayCount[i] > 0) {
-                engagementByDay[i] = Math.round(engagementByDay[i] / dayCount[i]);
-                atRiskByDay[i] = Math.round(atRiskByDay[i] / (dayCount[i] * 0.3)); // Adjust for fewer at-risk learners
-            }
-        }
-        
-        if (engagementChart) {
-            engagementChart.destroy();
-        }
-        
-        engagementChart = new Chart(engagementCtx, {
-            type: 'line',
-            data: {
-                labels: days,
-                datasets: [
-                    {
-                        label: 'Average Engagement',
-                        data: engagementByDay,
-                        borderColor: '#B22222',
-                        backgroundColor: 'rgba(178, 34, 34, 0.1)',
-                        tension: 0.3,
-                        fill: true
-                    },
-                    {
-                        label: 'At Risk Learners',
-                        data: atRiskByDay,
-                        borderColor: '#f39c12',
-                        backgroundColor: 'rgba(243, 156, 18, 0.1)',
-                        tension: 0.3,
-                        fill: true
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'top',
-                    }
+            
+            engagementChart = new Chart(engagementCtx, {
+                type: 'line',
+                data: {
+                    labels: monthlyData.labels,
+                    datasets: [
+                        {
+                            label: 'Average Engagement',
+                            data: monthlyData.engagement_data,
+                            borderColor: '#B22222',
+                            backgroundColor: 'rgba(178, 34, 34, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            borderWidth: 3,
+                            pointBackgroundColor: '#B22222',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointRadius: 4
+                        },
+                        {
+                            label: 'At Risk Engagement',
+                            data: monthlyData.at_risk_data,
+                            borderColor: '#f39c12',
+                            backgroundColor: 'rgba(243, 156, 18, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            borderWidth: 2,
+                            pointBackgroundColor: '#f39c12',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointRadius: 3
+                        }
+                    ]
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100,
-                        ticks: {
-                            callback: function(value) {
-                                return value + '%';
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 20
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y + '%';
+                                }
+                            }
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                maxTicksLimit: 6
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
                             }
                         }
                     }
                 }
+            });
+            
+        } catch (error) {
+            console.error('Error loading monthly engagement chart:', error);
+            // Fallback to empty chart
+            const engagementCtx = document.getElementById('engagementChart').getContext('2d');
+            if (engagementChart) {
+                engagementChart.destroy();
             }
-        });
+            
+            engagementChart = new Chart(engagementCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                    datasets: [{
+                        label: 'No Data Available',
+                        data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                        borderColor: '#ddd',
+                        backgroundColor: 'rgba(221, 221, 221, 0.1)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
     }
     
     // Load intervention chart with real data
@@ -296,13 +345,23 @@
             
             activities.forEach(activity => {
                 const row = document.createElement('tr');
-                const statusClass = activity.status.toLowerCase().replace(' ', '-');
+                const statusClass = activity.status.toLowerCase().replace(/ /g, '-');
+                
+                // Check if status indicates an issue (highlight in red)
+                let additionalClass = '';
+                if (activity.status.toLowerCase() === 'will drop off') {
+                    additionalClass = ' status-will-drop-off';
+                } else {
+                    const issueKeywords = ['at risk', 'will drop off', 'drop off', 'failed', 'error', 'problem', 'issue', 'concern'];
+                    const hasIssue = issueKeywords.some(keyword => activity.status.toLowerCase().includes(keyword));
+                    additionalClass = hasIssue ? ' status-issue' : '';
+                }
                 
                 row.innerHTML = `
                     <td>${activity.name}</td>
                     <td>${activity.activity}</td>
                     <td>${activity.time}</td>
-                    <td><span class="status-badge status-${statusClass}">${activity.status}</span></td>
+                    <td class="status-column"><span class="status-badge status-${statusClass}${additionalClass}">${activity.status}</span></td>
                 `;
                 
                 tableBody.appendChild(row);

@@ -20,7 +20,7 @@
             <i class="fas fa-user-check"></i>
         </div>
         <div class="stat-value" id="active-learners" style="font-size: 24px; font-weight: 600; margin: 5px 0;">0</div>
-        <div class="stat-label" style="color: var(--gray); font-size: 14px;">Active Learners</div>
+        <div class="stat-label" style="color: var(--gray); font-size: 14px;">Active Learners (On Track)</div>
     </div>
     <div class="card">
         <div class="stat-icon" style="background-color: rgba(241, 196, 15, 0.1); color: #f1c40f; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; font-size: 20px;">
@@ -35,6 +35,13 @@
         </div>
         <div class="stat-value" id="completed-learners" style="font-size: 24px; font-weight: 600; margin: 5px 0;">0</div>
         <div class="stat-label" style="color: var(--gray); font-size: 14px;">Completed Learners</div>
+    </div>
+    <div class="card">
+        <div class="stat-icon" style="background-color: rgba(231, 76, 60, 0.1); color: #e74c3c; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; font-size: 20px;">
+            <i class="fas fa-times-circle"></i>
+        </div>
+        <div class="stat-value" id="will-dropoff-learners" style="font-size: 24px; font-weight: 600; margin: 5px 0;">0</div>
+        <div class="stat-label" style="color: var(--gray); font-size: 14px;">High risk learners</div>
     </div>
 </div>
 
@@ -189,6 +196,8 @@
             document.getElementById('active-learners').textContent = '0';
             document.getElementById('at-risk-learners').textContent = '0';
             document.getElementById('completed-learners').textContent = '0';
+            const willDropEl = document.getElementById('will-dropoff-learners');
+            if (willDropEl) willDropEl.textContent = '0';
             return;
         }
         
@@ -196,6 +205,7 @@
         let activeLearners = 0;
         let atRiskLearners = 0;
         let completedLearners = 0;
+        let willDropOffLearners = 0;
         
         learners.forEach(learner => {
             // Count by status
@@ -205,8 +215,10 @@
                 atRiskLearners++;
             } else if (learner.status === 'Completed') {
                 completedLearners++;
+            } else if (learner.status === 'Will Drop Off') {
+                willDropOffLearners++;
             }
-            // Note: 'Will Drop Off' learners are not counted as active, at-risk, or completed
+            // 'Will Drop Off' learners are counted separately
         });
         
         // Update the display
@@ -214,6 +226,8 @@
         document.getElementById('active-learners').textContent = activeLearners.toLocaleString();
         document.getElementById('at-risk-learners').textContent = atRiskLearners.toLocaleString();
         document.getElementById('completed-learners').textContent = completedLearners.toLocaleString();
+        const willDropEl = document.getElementById('will-dropoff-learners');
+        if (willDropEl) willDropEl.textContent = willDropOffLearners.toLocaleString();
     }
 
     // Function to filter learners
