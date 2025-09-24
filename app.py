@@ -12,6 +12,17 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+# Ensure DB exists and tables are created on startup (Render-safe)
+try:
+    from db import create_tables_if_not_exist
+    _conn = get_db_connection()
+    _cur = _conn.cursor()
+    create_tables_if_not_exist(_cur)
+    _conn.commit()
+    _conn.close()
+except Exception as e:
+    print(f"Warning: DB init check failed: {e}")
+
 # Authentication functions
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
